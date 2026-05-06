@@ -62,13 +62,35 @@ The app comes pre-loaded with common street food items:
 - Camote Cue - ₱25.00
 - Saging na Saba - ₱20.00
 
-## Technical Stack
+## 🚀 New Features (v2.0)
+- **Cloud Sync:** Fully migrated from Room database to Firebase Firestore for real-time cloud synchronization.
+- **Firebase Auth:** Secure login for Admin and Cashier roles (Email/Password).
+- **Profit Tracking:** Added `Cost/Puhunan` tracking for products. Automatically computes net profit/kita per item and total profit in the Analytics Dashboard.
+- **Modern UI:** Upgraded to Material 3 components with a clean, dynamic aesthetic.
 
-- **Language**: Kotlin
-- **UI Framework**: Jetpack Compose
-- **Database**: Room Database
-- **Architecture**: MVVM with ViewModels
-- **Navigation**: Jetpack Navigation Compose
+## 🛠 Tech Stack
+- **Language:** Kotlin
+- **UI Framework:** Jetpack Compose (Material 3)
+- **Database:** Firebase Firestore (Cloud NoSQL)
+- **Authentication:** Firebase Auth
+- **Architecture:** MVVM (Model-View-ViewModel) with Kotlin Coroutines & Flow
+
+## 📋 Features
+### 👑 Admin Dashboard
+- **Product Management:** Add, edit, and delete products. Set Selling Price and **Puhunan (Cost)** to track profit. Toggle availability (in-stock/out-of-stock).
+- **Analytics:** View total revenue, total cost, net profit, transactions, average order value, and best-selling products with date filtering (Today, This Week, This Month).
+- **Transaction History:** View all past sales.
+
+### 👩‍💼 Cashier Dashboard
+- **Point of Sale (POS):** Tap products to add to cart, adjust quantities, and calculate totals instantly.
+- **Payment Processing:** Enter cash amount and automatically compute change.
+- **Role-based Access:** Cashiers can only access POS, Payment, and view their own dashboard.
+
+## 🔐 Demo Credentials
+> [!IMPORTANT]
+> To test the app, use the following demo accounts (ensure they are registered in your Firebase Authentication console):
+- **Admin:** `admin@test.com` | Password: `admin123`
+- **Cashier:** `cashier@test.com` | Password: `cashier123`
 
 ## Project Structure
 
