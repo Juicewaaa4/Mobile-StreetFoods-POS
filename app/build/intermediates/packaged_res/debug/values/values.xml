@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Zoey\'s Street Foods</string>
+    <style name="Theme.StreetFoodPOS" parent="android:Theme.Material.Light.NoActionBar">
+    </style>
+</resources>
