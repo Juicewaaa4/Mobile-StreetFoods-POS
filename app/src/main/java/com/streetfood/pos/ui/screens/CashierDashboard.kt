@@ -20,6 +20,9 @@ import com.streetfood.pos.ui.components.*
 import com.streetfood.pos.viewmodel.TransactionViewModel
 import java.text.SimpleDateFormat
 import java.util.*
+import androidx.activity.compose.BackHandler
+import androidx.compose.ui.platform.LocalContext
+import android.app.Activity
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -34,6 +37,11 @@ fun CashierDashboard(
 
     val todaySales = todayTransactions.sumOf { it.totalAmount }
     val todayCount = todayTransactions.size
+
+    val context = LocalContext.current
+    BackHandler {
+        (context as? Activity)?.finish()
+    }
 
     // Greeting based on time of day
     val greeting = remember {

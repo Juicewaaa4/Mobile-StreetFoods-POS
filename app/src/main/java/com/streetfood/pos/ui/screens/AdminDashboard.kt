@@ -19,6 +19,9 @@ import com.streetfood.pos.viewmodel.AnalyticsViewModel
 import com.streetfood.pos.viewmodel.TransactionViewModel
 import java.text.SimpleDateFormat
 import java.util.*
+import androidx.activity.compose.BackHandler
+import androidx.compose.ui.platform.LocalContext
+import android.app.Activity
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -45,6 +48,11 @@ fun AdminDashboard(
     val todayCount = (analyticsState as? UiState.Success)?.data?.transactionCount ?: 0
     val bestSeller = (analyticsState as? UiState.Success)?.data?.bestSellerName ?: "N/A"
     val activeProducts = (analyticsState as? UiState.Success)?.data?.activeProductCount ?: 0
+
+    val context = LocalContext.current
+    BackHandler {
+        (context as? Activity)?.finish()
+    }
 
     Scaffold(
         topBar = {

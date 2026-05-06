@@ -55,17 +55,16 @@ class AuthViewModel : ViewModel() {
             _loginError.value = "Please enter your email and password."
             return
         }
-        viewModelScope.launch {
-            _isLoading.value = true
-            _loginError.value = null
-            try {
-                // Ensure the input looks like an email. If the user types "admin", format it as "admin@test.com"
-                val cleanEmail = email.trim().lowercase()
-                val finalEmail = if (!cleanEmail.contains("@")) "$cleanEmail@test.com" else cleanEmail
 
-                val result = auth.signInWithEmailAndPassword(finalEmail, password).await()
+        _isLoading.value = true
+        _loginError.value = null
+
+        val cleanEmail = email.trim().lowercase()
+        val finalEmail = if (!cleanEmail.contains("@")) "$cleanEmail@test.com" else cleanEmail
+
+        auth.signInWithEmailAndPassword(finalEmail, password)
+            .addOnSuccessListener { result ->
                 val firebaseUser = result.user
-
                 if (firebaseUser != null) {
                     val role = if (firebaseUser.email?.contains("admin") == true) UserRole.ADMIN else UserRole.CASHIER
                     val user = User(
@@ -79,7 +78,9 @@ class AuthViewModel : ViewModel() {
                     _userRole.value = user.role.name
                     _isLoggedIn.value = true
                 }
-            } catch (e: Exception) {
+                _isLoading.value = false
+            }
+            .addOnFailureListener { e ->
                 val msg = e.message ?: ""
                 _loginError.value = when {
                     "INVALID_LOGIN_CREDENTIALS" in msg || "wrong-password" in msg || "invalid-credential" in msg ->
@@ -90,12 +91,12 @@ class AuthViewModel : ViewModel() {
                         "Walang internet connection. I-check ang iyong WiFi o Data."
                     "too-many-requests" in msg ->
                         "Maraming beses na nagkamali. Subukan ulit mamaya."
-                    else -> "Login failed. Suriin ang iyong credentials."
+                    "api_key" in msg.lowercase() || "blocked" in msg.lowercase() ->
+                        "API Key Error: Na-block o pinalitan mo ang API Key. Paki-download ang bagong google-services.json"
+                    else -> "Error: $msg" // Ipapakita ang totoong error sa screen
                 }
-            } finally {
                 _isLoading.value = false
             }
-        }
     }
 
     fun logout() {
