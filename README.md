@@ -97,9 +97,9 @@ The app comes pre-loaded with common street food items:
 ```
 app/src/main/java/com/streetfood/pos/
 ├── data/
-│   ├── dao/           # Data Access Objects
-│   ├── database/      # Room database setup
-│   └── models/        # Data models (Product, Transaction, User)
+│   ├── models/        # Data models (Product, Transaction, User, Analytics)
+│   └── repository/    # Firebase Firestore repositories
+
 ├── navigation/        # Navigation setup
 ├── ui/
 │   ├── screens/       # Compose screens
