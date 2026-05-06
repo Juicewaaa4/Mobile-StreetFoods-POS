@@ -2,171 +2,145 @@ package com.streetfood.pos.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.streetfood.pos.data.database.AppDatabase
-import com.streetfood.pos.data.models.CartItem
-import com.streetfood.pos.data.models.Product
-import com.streetfood.pos.data.models.Transaction
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import com.streetfood.pos.data.models.*
+import com.streetfood.pos.data.repository.ProductRepository
+import com.streetfood.pos.data.repository.TransactionRepository
+import com.streetfood.pos.data.repository.UserSessionRepository
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
+enum class ProductFilterMode { ALL, AVAILABLE, UNAVAILABLE }
+
 class POSViewModel(
-    private val database: AppDatabase
+    private val productRepo: ProductRepository,
+    private val transactionRepo: TransactionRepository
 ) : ViewModel() {
-    
+
+    private val _searchQuery = MutableStateFlow("")
+    val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
+
+    private val _filterMode = MutableStateFlow(ProductFilterMode.ALL)
+    val filterMode: StateFlow<ProductFilterMode> = _filterMode.asStateFlow()
+
+    private val _allProducts = MutableStateFlow<List<Product>>(emptyList())
+
+    /** Products filtered by search query and availability filter. */
+    val filteredProducts: StateFlow<List<Product>> = combine(_allProducts, _searchQuery, _filterMode) { products, query, mode ->
+        products.filter { p ->
+            val matchesSearch = query.isBlank() || p.name.contains(query, ignoreCase = true)
+            val matchesFilter = when (mode) {
+                ProductFilterMode.ALL -> true
+                ProductFilterMode.AVAILABLE -> p.isAvailable
+                ProductFilterMode.UNAVAILABLE -> !p.isAvailable
+            }
+            matchesSearch && matchesFilter
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     private val _cart = MutableStateFlow<List<CartItem>>(emptyList())
     val cart: StateFlow<List<CartItem>> = _cart.asStateFlow()
-
-    private val _products = MutableStateFlow<List<Product>>(emptyList())
-    val products: StateFlow<List<Product>> = _products.asStateFlow()
 
     private val _totalAmount = MutableStateFlow(0.0)
     val totalAmount: StateFlow<Double> = _totalAmount.asStateFlow()
 
-    private val _cashReceived = MutableStateFlow(0.0)
-    val cashReceived: StateFlow<Double> = _cashReceived.asStateFlow()
-
-    private val _change = MutableStateFlow(0.0)
-    val change: StateFlow<Double> = _change.asStateFlow()
+    /** Set to true after a successful transaction, consumed by UI to show success dialog. */
+    private val _transactionSuccess = MutableStateFlow(false)
+    val transactionSuccess: StateFlow<Boolean> = _transactionSuccess.asStateFlow()
 
     private val _isProcessingPayment = MutableStateFlow(false)
     val isProcessingPayment: StateFlow<Boolean> = _isProcessingPayment.asStateFlow()
 
-    init {
-        loadProducts()
-        initializeDefaultProducts()
-    }
+    /** How many of a given product are in the cart — used for badge display. */
+    fun cartQtyFor(productId: String): Int = _cart.value.find { it.product.id == productId }?.quantity ?: 0
 
-    private fun loadProducts() {
+    init {
         viewModelScope.launch {
-            database.productDao().getAvailableProducts().collect { productList ->
-                _products.value = productList
+            productRepo.getAllProducts().collect { products ->
+                _allProducts.value = products
+                if (products.isEmpty()) initializeDefaultProducts()
             }
         }
     }
 
     private fun initializeDefaultProducts() {
         viewModelScope.launch {
-            val existingProducts = database.productDao().getAvailableProducts()
-            existingProducts.collect { products ->
-                if (products.isEmpty()) {
-                    // Add default street food products
-                    val defaultProducts = listOf(
-                        Product(name = "Fishball", price = 30.0, category = "Street Food"),
-                        Product(name = "Kwek-Kwek", price = 40.0, category = "Street Food"),
-                        Product(name = "Squidball", price = 35.0, category = "Street Food"),
-                        Product(name = "Chicken Balls", price = 45.0, category = "Street Food"),
-                        Product(name = "Hotdog on Stick", price = 50.0, category = "Street Food"),
-                        Product(name = "Banana Cue", price = 25.0, category = "Street Food"),
-                        Product(name = "Camote Cue", price = 25.0, category = "Street Food"),
-                        Product(name = "Saging na Saba", price = 20.0, category = "Street Food")
-                    )
-                    
-                    defaultProducts.forEach { product ->
-                        database.productDao().insertProduct(product)
-                    }
-                }
-            }
+            listOf(
+                Product(name = "Fishball",        price = 30.0,  cost = 15.0),
+                Product(name = "Kwek-Kwek",       price = 40.0,  cost = 20.0),
+                Product(name = "Squidball",       price = 35.0,  cost = 18.0),
+                Product(name = "Chicken Balls",   price = 45.0,  cost = 22.0),
+                Product(name = "Hotdog on Stick", price = 50.0,  cost = 25.0),
+                Product(name = "Banana Cue",      price = 25.0,  cost = 10.0),
+                Product(name = "Camote Cue",      price = 25.0,  cost = 10.0),
+                Product(name = "Saging na Saba",  price = 20.0,  cost = 8.0)
+            ).forEach { productRepo.insertProduct(it) }
         }
     }
+
+    fun setSearchQuery(q: String) { _searchQuery.value = q }
+    fun setFilterMode(m: ProductFilterMode) { _filterMode.value = m }
 
     fun addToCart(product: Product) {
-        val currentCart = _cart.value.toMutableList()
-        val existingItem = currentCart.find { it.product.id == product.id }
-        
-        if (existingItem != null) {
-            val updatedCart = currentCart.map { item ->
-                if (item.product.id == product.id) {
-                    item.copy(quantity = item.quantity + 1)
-                } else {
-                    item
-                }
-            }
-            _cart.value = updatedCart
+        if (!product.isAvailable) return
+        val current = _cart.value.toMutableList()
+        val idx = current.indexOfFirst { it.product.id == product.id }
+        if (idx >= 0) {
+            current[idx] = current[idx].let { it.copy(quantity = it.quantity + 1) }
         } else {
-            _cart.value = currentCart + CartItem(product, 1)
+            current.add(CartItem(product, 1))
         }
-        
-        calculateTotal()
+        _cart.value = current
+        recalcTotal()
     }
 
-    fun updateQuantity(cartItem: CartItem, newQuantity: Int) {
-        if (newQuantity <= 0) {
-            removeFromCart(cartItem)
-        } else {
-            val updatedCart = _cart.value.map { item ->
-                if (item.product.id == cartItem.product.id) {
-                    item.copy(quantity = newQuantity)
-                } else {
-                    item
-                }
-            }
-            _cart.value = updatedCart
-            calculateTotal()
+    fun updateQuantity(cartItem: CartItem, qty: Int) {
+        if (qty <= 0) removeFromCart(cartItem) else {
+            _cart.value = _cart.value.map { if (it.product.id == cartItem.product.id) it.copy(quantity = qty) else it }
+            recalcTotal()
         }
     }
 
     fun removeFromCart(cartItem: CartItem) {
         _cart.value = _cart.value.filter { it.product.id != cartItem.product.id }
-        calculateTotal()
+        recalcTotal()
     }
 
     fun clearCart() {
         _cart.value = emptyList()
         _totalAmount.value = 0.0
-        _cashReceived.value = 0.0
-        _change.value = 0.0
     }
 
-    private fun calculateTotal() {
+    private fun recalcTotal() {
         _totalAmount.value = _cart.value.sumOf { it.totalPrice }
-        calculateChange()
     }
 
-    fun updateCashReceived(amount: String) {
-        val cash = amount.toDoubleOrNull() ?: 0.0
-        _cashReceived.value = cash
-        calculateChange()
-    }
-
-    private fun calculateChange() {
-        _change.value = (_cashReceived.value - _totalAmount.value).coerceAtLeast(0.0)
-    }
-
-    fun processTransaction(cashierName: String = "Cashier"): Boolean {
-        if (_cart.value.isEmpty() || _cashReceived.value < _totalAmount.value) {
-            return false
-        }
+    fun processTransaction(cashDigits: String): Boolean {
+        val cash = cashDigits.toDoubleOrNull()?.div(100.0) ?: 0.0
+        if (_cart.value.isEmpty() || cash < _totalAmount.value) return false
 
         viewModelScope.launch {
             _isProcessingPayment.value = true
-            
             try {
+                val cashierName = UserSessionRepository.username
                 val transaction = Transaction(
                     totalAmount = _totalAmount.value,
-                    cashReceived = _cashReceived.value,
-                    change = _change.value,
+                    cashReceived = cash,
+                    change = cash - _totalAmount.value,
                     cashierName = cashierName,
-                    items = _cart.value.map { 
-                        com.streetfood.pos.data.models.TransactionItem(
-                            productName = it.product.name,
-                            quantity = it.quantity,
-                            unitPrice = it.product.price,
-                            totalPrice = it.totalPrice
-                        )
+                    items = _cart.value.map {
+                        TransactionItem(productName = it.product.name, quantity = it.quantity, unitPrice = it.product.price, totalPrice = it.totalPrice)
                     }
                 )
-                
-                database.transactionDao().insertTransaction(transaction)
+                transactionRepo.insertTransaction(transaction)
                 clearCart()
-            } catch (e: Exception) {
-                // Handle error
+                _transactionSuccess.value = true
+            } catch (_: Exception) {
             } finally {
                 _isProcessingPayment.value = false
             }
         }
-        
         return true
     }
+
+    fun consumeTransactionSuccess() { _transactionSuccess.value = false }
 }

@@ -12,335 +12,118 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.lifecycle.viewmodel.compose.viewModel
-import com.streetfood.pos.data.database.AppDatabase
-import com.streetfood.pos.data.models.Transaction
-import com.streetfood.pos.ui.theme.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.streetfood.pos.data.models.*
+import com.streetfood.pos.ui.components.*
 import com.streetfood.pos.viewmodel.TransactionViewModel
-import com.streetfood.pos.viewmodel.TransactionViewModelFactory
+import java.text.SimpleDateFormat
+import java.util.*
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun TransactionHistoryScreen(
-    onBack: () -> Unit,
-    database: AppDatabase,
-    transactionViewModel: TransactionViewModel = viewModel(factory = TransactionViewModelFactory(database))
+    transactionViewModel: TransactionViewModel,
+    onBack: () -> Unit
 ) {
-    val transactions by transactionViewModel.transactions.collectAsState()
-    val isLoading by transactionViewModel.isLoading.collectAsState()
-    val totalRevenue by transactionViewModel.totalRevenue.collectAsState()
-    val totalTransactions by transactionViewModel.totalTransactions.collectAsState()
+    val dateFilter by transactionViewModel.dateFilter.collectAsStateWithLifecycle()
+    val transactionsState by transactionViewModel.allTransactions.collectAsStateWithLifecycle()
+    var searchQuery by remember { mutableStateOf("") }
 
-    LaunchedEffect(Unit) {
-        transactionViewModel.loadTransactions()
-        transactionViewModel.loadStats()
-    }
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        // Header
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(onClick = onBack) {
-                Icon(
-                    Icons.Default.ArrowBack,
-                    contentDescription = "Back",
-                    tint = PrimaryGreen
-                )
-            }
-            
-            Text(
-                text = "Transaction History",
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Bold,
-                color = TextPrimary
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Transaction History", fontWeight = FontWeight.Bold) },
+                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "Back") } },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
             )
-            
-            IconButton(
-                onClick = {
-                    transactionViewModel.loadTransactions()
-                    transactionViewModel.loadStats()
-                }
-            ) {
-                Icon(
-                    Icons.Default.Refresh,
-                    contentDescription = "Refresh",
-                    tint = PrimaryGreen
-                )
-            }
         }
+    ) { padding ->
+        Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+            // Search bar
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = { searchQuery = it },
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                placeholder = { Text("Search by cashier name...") },
+                leadingIcon = { Icon(Icons.Default.Search, null) },
+                trailingIcon = { if (searchQuery.isNotBlank()) IconButton(onClick = { searchQuery = "" }) { Icon(Icons.Default.Clear, null) } },
+                singleLine = true,
+                shape = RoundedCornerShape(12.dp)
+            )
 
-        // Stats Cards
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Card(
-                modifier = Modifier.weight(1f),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = Surface),
-                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Icon(
-                        Icons.Default.Info,
-                        contentDescription = "Revenue",
-                        tint = PrimaryGreen,
-                        modifier = Modifier.size(32.dp)
-                    )
-                    Text(
-                        text = "Total Revenue",
-                        fontSize = 14.sp,
-                        color = TextSecondary
-                    )
-                    Text(
-                        text = transactionViewModel.formatCurrency(totalRevenue),
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = PrimaryGreen
+            // Date filter chips
+            Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                DateFilter.values().forEach { filter ->
+                    FilterChip(
+                        selected = dateFilter == filter,
+                        onClick = { transactionViewModel.setDateFilter(filter) },
+                        label = { Text(filter.label, style = MaterialTheme.typography.labelSmall) },
+                        shape = RoundedCornerShape(50.dp)
                     )
                 }
             }
 
-            Card(
-                modifier = Modifier.weight(1f),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = Surface),
-                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Icon(
-                        Icons.Default.List,
-                        contentDescription = "Transactions",
-                        tint = PrimaryGreen,
-                        modifier = Modifier.size(32.dp)
-                    )
-                    Text(
-                        text = "Transactions",
-                        fontSize = 14.sp,
-                        color = TextSecondary
-                    )
-                    Text(
-                        text = totalTransactions.toString(),
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = PrimaryGreen
-                    )
-                }
-            }
-        }
+            Spacer(Modifier.height(4.dp))
 
-        // Transactions List
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = Surface),
-            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-        ) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Text(
-                    text = "Recent Transactions",
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = TextPrimary
-                )
-                
-                if (isLoading) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(200.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        CircularProgressIndicator(
-                            color = PrimaryGreen,
-                            strokeWidth = 3.dp
-                        )
+            when (val state = transactionsState) {
+                is UiState.Loading -> LoadingIndicator()
+                is UiState.Empty -> EmptyStateView("🧾", "No Transactions", "No records found for ${dateFilter.label.lowercase()}.")
+                is UiState.Success -> {
+                    // Filter by search + date
+                    val (start, end) = dateFilter.toDateRange()
+                    val filtered = state.data.filter { tx ->
+                        tx.timestamp in start..end &&
+                        (searchQuery.isBlank() || tx.cashierName.contains(searchQuery, ignoreCase = true))
                     }
-                } else if (transactions.isEmpty()) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(200.dp),
-                        contentAlignment = Alignment.Center
+
+                    if (filtered.isEmpty()) {
+                        EmptyStateView("🔍", "No Results", "No transactions match your search.")
+                        return@Column
+                    }
+
+                    // Summary bar
+                    val totalFiltered = filtered.sumOf { it.totalAmount }
+                    Card(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+                        shape = RoundedCornerShape(10.dp)
                     ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Icon(
-                                Icons.Default.List,
-                                contentDescription = "No Transactions",
-                                tint = TextSecondary,
-                                modifier = Modifier.size(48.dp)
-                            )
-                            Text(
-                                text = "No transactions found",
-                                fontSize = 16.sp,
-                                color = TextSecondary
-                            )
-                            Text(
-                                text = "Transactions will appear here once sales are made",
-                                fontSize = 14.sp,
-                                color = TextSecondary
-                            )
+                        Row(modifier = Modifier.padding(12.dp, 10.dp).fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("${filtered.size} transactions", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                            Text(formatPeso(totalFiltered), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
                         }
                     }
-                } else {
+
+                    // Group by date, show sticky headers
+                    val grouped = filtered.groupBy { tx ->
+                        SimpleDateFormat("MMMM d, yyyy", Locale.getDefault()).format(Date(tx.timestamp))
+                    }
+
                     LazyColumn(
+                        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.height(400.dp)
+                        contentPadding = PaddingValues(vertical = 8.dp)
                     ) {
-                        items(transactions) { transaction ->
-                            TransactionRow(
-                                transaction = transaction,
-                                formatDate = { timestamp ->
-                                    transactionViewModel.formatTimestamp(timestamp)
-                                },
-                                formatCurrency = { amount ->
-                                    transactionViewModel.formatCurrency(amount)
+                        grouped.forEach { (dateLabel, txns) ->
+                            stickyHeader {
+                                Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxWidth()) {
+                                    Text(
+                                        text = dateLabel,
+                                        style = MaterialTheme.typography.labelLarge,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.padding(vertical = 6.dp)
+                                    )
                                 }
-                            )
+                            }
+                            items(txns, key = { it.id }) { tx ->
+                                ExpandableTransactionCard(tx, transactionViewModel)
+                            }
                         }
+                        item { Spacer(Modifier.height(24.dp)) }
                     }
                 }
-            }
-        }
-    }
-}
-
-@Composable
-fun TransactionRow(
-    transaction: Transaction,
-    formatDate: (Long) -> String,
-    formatCurrency: (Double) -> String
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = Background),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top
-            ) {
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Text(
-                        text = "Transaction #${transaction.id}",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = TextPrimary
-                    )
-                    Text(
-                        text = formatDate(transaction.timestamp),
-                        fontSize = 14.sp,
-                        color = TextSecondary
-                    )
-                    Text(
-                        text = "Cashier: ${transaction.cashierName}",
-                        fontSize = 14.sp,
-                        color = TextSecondary
-                    )
-                }
-                
-                Column(
-                    horizontalAlignment = Alignment.End,
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Text(
-                        text = formatCurrency(transaction.totalAmount),
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = PrimaryGreen
-                    )
-                    Text(
-                        text = "Cash: ${formatCurrency(transaction.cashReceived)}",
-                        fontSize = 12.sp,
-                        color = TextSecondary
-                    )
-                    Text(
-                        text = "Change: ${formatCurrency(transaction.change)}",
-                        fontSize = 12.sp,
-                        color = SuccessColor
-                    )
-                }
-            }
-            
-            // Items summary
-            if (transaction.items.isNotEmpty()) {
-                Divider(
-                    color = TextSecondary.copy(alpha = 0.3f),
-                    modifier = Modifier.padding(vertical = 4.dp)
-                )
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(2.dp)
-                ) {
-                    Text(
-                        text = "Items (${transaction.items.size}):",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = TextPrimary
-                    )
-                    transaction.items.take(3).forEach { item ->
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(
-                                text = "${item.quantity}x ${item.productName}",
-                                fontSize = 12.sp,
-                                color = TextSecondary
-                            )
-                            Text(
-                                text = formatCurrency(item.totalPrice),
-                                fontSize = 12.sp,
-                                color = TextSecondary
-                            )
-                        }
-                    }
-                    if (transaction.items.size > 3) {
-                        Text(
-                            text = "... and ${transaction.items.size - 3} more items",
-                            fontSize = 12.sp,
-                            color = TextSecondary,
-                            fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
-                        )
-                    }
-                }
+                is UiState.Error -> EmptyStateView("⚠️", "Error", state.message)
             }
         }
     }

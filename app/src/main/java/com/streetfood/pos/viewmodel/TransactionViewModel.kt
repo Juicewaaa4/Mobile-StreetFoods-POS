@@ -2,70 +2,51 @@ package com.streetfood.pos.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.streetfood.pos.data.database.AppDatabase
-import com.streetfood.pos.data.models.Transaction
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import com.streetfood.pos.data.models.*
+import com.streetfood.pos.data.repository.TransactionRepository
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
 
 class TransactionViewModel(
-    private val database: AppDatabase
+    private val repo: TransactionRepository
 ) : ViewModel() {
-    
-    private val _transactions = MutableStateFlow<List<Transaction>>(emptyList())
-    val transactions: StateFlow<List<Transaction>> = _transactions.asStateFlow()
 
-    private val _isLoading = MutableStateFlow(false)
-    val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
+    private val _dateFilter = MutableStateFlow(DateFilter.TODAY)
+    val dateFilter: StateFlow<DateFilter> = _dateFilter.asStateFlow()
 
-    private val _totalRevenue = MutableStateFlow(0.0)
-    val totalRevenue: StateFlow<Double> = _totalRevenue.asStateFlow()
-
-    private val _totalTransactions = MutableStateFlow(0)
-    val totalTransactions: StateFlow<Int> = _totalTransactions.asStateFlow()
-
-    init {
-        loadTransactions()
-        loadStats()
-    }
-
-    fun loadTransactions() {
-        viewModelScope.launch {
-            _isLoading.value = true
-            try {
-                database.transactionDao().getAllTransactions().collect { transactionList ->
-                    _transactions.value = transactionList
-                    _isLoading.value = false
-                }
-            } catch (e: Exception) {
-                _isLoading.value = false
+    /** Transactions for the currently selected date filter. */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val filteredTransactions: StateFlow<UiState<List<Transaction>>> = _dateFilter
+        .flatMapLatest { filter ->
+            val (start, end) = filter.toDateRange()
+            repo.getByDateRange(start, end).map { list ->
+                if (list.isEmpty()) UiState.Empty else UiState.Success(list)
             }
         }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), UiState.Loading)
+
+    /** Today's transactions for a specific cashier — used in Cashier Dashboard. */
+    fun getCashierTodayTransactions(cashierName: String): Flow<List<Transaction>> {
+        val (start, end) = DateFilter.TODAY.toDateRange()
+        return repo.getByCashierToday(cashierName, start, end)
     }
 
-    fun loadStats() {
-        viewModelScope.launch {
-            try {
-                val revenue = database.transactionDao().getTotalRevenue() ?: 0.0
-                val count = database.transactionDao().getTotalTransactions()
-                _totalRevenue.value = revenue
-                _totalTransactions.value = count
-            } catch (e: Exception) {
-                _totalRevenue.value = 0.0
-                _totalTransactions.value = 0
-            }
-        }
-    }
+    /** All transactions (for Admin Transaction History). */
+    val allTransactions: StateFlow<UiState<List<Transaction>>> =
+        repo.getAllTransactions()
+            .map { list -> if (list.isEmpty()) UiState.Empty else UiState.Success(list) }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), UiState.Loading)
 
-    fun formatTimestamp(timestamp: Long): String {
-        val sdf = SimpleDateFormat("MMM dd, yyyy - hh:mm a", Locale.getDefault())
-        return sdf.format(Date(timestamp))
-    }
+    fun setDateFilter(filter: DateFilter) { _dateFilter.value = filter }
 
-    fun formatCurrency(amount: Double): String {
-        return "₱%.2f".format(amount)
-    }
+    fun formatTimestamp(ts: Long): String =
+        SimpleDateFormat("hh:mm a", Locale.getDefault()).format(Date(ts))
+
+    fun formatDate(ts: Long): String =
+        SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()).format(Date(ts))
+
+    fun formatCurrency(amount: Double): String = "₱%.2f".format(amount)
 }

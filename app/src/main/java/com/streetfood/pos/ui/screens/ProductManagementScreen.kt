@@ -14,267 +14,193 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.lifecycle.viewmodel.compose.viewModel
-import com.streetfood.pos.data.database.AppDatabase
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.streetfood.pos.data.models.Product
-import com.streetfood.pos.ui.theme.*
+import com.streetfood.pos.data.models.UiState
+import com.streetfood.pos.ui.components.*
 import com.streetfood.pos.viewmodel.ProductViewModel
-import com.streetfood.pos.viewmodel.ProductViewModelFactory
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProductManagementScreen(
-    onBack: () -> Unit,
-    database: AppDatabase,
-    productViewModel: ProductViewModel = viewModel(factory = ProductViewModelFactory(database))
+    productViewModel: ProductViewModel,
+    onBack: () -> Unit
 ) {
-    var showAddDialog by remember { mutableStateOf(false) }
-    var showEditDialog by remember { mutableStateOf(false) }
+    val productsState by productViewModel.products.collectAsStateWithLifecycle()
+    val snackbarHostState = remember { SnackbarHostState() }
+    var showAddSheet by remember { mutableStateOf(false) }
+    var editProduct by remember { mutableStateOf<Product?>(null) }
+    var deleteProduct by remember { mutableStateOf<Product?>(null) }
+    var pendingUndo by remember { mutableStateOf<Product?>(null) }
 
-    val products by productViewModel.products.collectAsState()
-    val isLoading by productViewModel.isLoading.collectAsState()
-    val selectedProduct by productViewModel.selectedProduct.collectAsState()
-
-    LaunchedEffect(Unit) {
-        productViewModel.loadProducts()
-    }
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        // Header
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(onClick = onBack) {
-                Icon(
-                    Icons.Default.ArrowBack,
-                    contentDescription = "Back",
-                    tint = PrimaryGreen
-                )
-            }
-            
-            Text(
-                text = "Product Management",
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Bold,
-                color = TextPrimary
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Product Management", fontWeight = FontWeight.Bold) },
+                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "Back") } },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
             )
-            
-            FloatingActionButton(
-                onClick = { showAddDialog = true },
-                containerColor = PrimaryGreen,
-                contentColor = Surface,
-                modifier = Modifier.size(48.dp)
-            ) {
-                Icon(
-                    Icons.Default.Add,
-                    contentDescription = "Add Product",
-                    modifier = Modifier.size(24.dp)
-                )
+        },
+        floatingActionButton = {
+            FloatingActionButton(onClick = { showAddSheet = true }, containerColor = MaterialTheme.colorScheme.primary) {
+                Icon(Icons.Default.Add, "Add Product", tint = MaterialTheme.colorScheme.onPrimary)
             }
-        }
-
-        // Products List
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = Surface),
-            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-        ) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                if (isLoading) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(200.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        CircularProgressIndicator(
-                            color = PrimaryGreen,
-                            strokeWidth = 3.dp
+        },
+        snackbarHost = { SnackbarHost(snackbarHostState) }
+    ) { padding ->
+        when (val state = productsState) {
+            is UiState.Loading -> LoadingIndicator()
+            is UiState.Empty -> EmptyStateView("🍢", "No Products Yet", "Tap + to add your first product.", modifier = Modifier.padding(padding))
+            is UiState.Success -> {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    contentPadding = PaddingValues(vertical = 12.dp)
+                ) {
+                    items(state.data, key = { it.id }) { product ->
+                        ProductManagementCard(
+                            product = product,
+                            onEdit = { editProduct = product },
+                            onDelete = { deleteProduct = product },
+                            onToggle = { productViewModel.toggleAvailability(product) }
                         )
                     }
-                } else if (products.isEmpty()) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(200.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Icon(
-                                Icons.Default.Star,
-                                contentDescription = "No Products",
-                                tint = TextSecondary,
-                                modifier = Modifier.size(48.dp)
-                            )
-                            Text(
-                                text = "No products found",
-                                fontSize = 16.sp,
-                                color = TextSecondary
-                            )
-                            Text(
-                                text = "Add your first product to get started",
-                                fontSize = 14.sp,
-                                color = TextSecondary
-                            )
-                        }
-                    }
-                } else {
-                    LazyColumn(
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.height(500.dp)
-                    ) {
-                        items(products) { product ->
-                            ProductItem(
-                                product = product,
-                                onEdit = { 
-                                    productViewModel.selectProduct(product)
-                                    showEditDialog = true
-                                },
-                                onDelete = { productViewModel.deleteProduct(product) },
-                                onToggleAvailability = { productViewModel.toggleProductAvailability(product) }
-                            )
-                        }
-                    }
+                    item { Spacer(Modifier.height(80.dp)) }
                 }
             }
+            is UiState.Error -> EmptyStateView("⚠️", "Error", state.message, modifier = Modifier.padding(padding))
         }
     }
 
-    // Add Product Dialog
-    if (showAddDialog) {
-        ProductDialog(
-            product = null,
-            onDismiss = { showAddDialog = false },
-            onSave = { product ->
-                productViewModel.addProduct(product)
-                showAddDialog = false
-            }
+    // Delete confirm dialog
+    deleteProduct?.let { product ->
+        ConfirmDialog(
+            title = "Delete \"${product.name}\"?",
+            message = "This product will be permanently removed.",
+            confirmLabel = "Delete",
+            onConfirm = {
+                pendingUndo = product
+                productViewModel.deleteProduct(product)
+                deleteProduct = null
+            },
+            onDismiss = { deleteProduct = null }
         )
     }
 
-    // Edit Product Dialog
-    if (showEditDialog) {
-        selectedProduct?.let { product ->
-            ProductDialog(
-                product = product,
-                onDismiss = { 
-                    showEditDialog = false
-                    productViewModel.selectProduct(null)
-                },
-                onSave = { updatedProduct ->
-                    productViewModel.updateProduct(updatedProduct)
-                    showEditDialog = false
-                    productViewModel.selectProduct(null)
-                }
-            )
+    // Undo snackbar
+    LaunchedEffect(pendingUndo) {
+        val deleted = pendingUndo ?: return@LaunchedEffect
+        val result = snackbarHostState.showSnackbar(
+            message = "\"${deleted.name}\" deleted",
+            actionLabel = "Undo",
+            duration = SnackbarDuration.Short
+        )
+        if (result == SnackbarResult.ActionPerformed) {
+            productViewModel.addProduct(deleted.copy(id = ""))
         }
+        pendingUndo = null
+    }
+
+    // Add/Edit bottom sheet
+    if (showAddSheet || editProduct != null) {
+        ProductFormSheet(
+            existing = editProduct,
+            onDismiss = { showAddSheet = false; editProduct = null },
+            onSave = { product ->
+                if (editProduct != null) productViewModel.updateProduct(product)
+                else productViewModel.addProduct(product)
+                showAddSheet = false; editProduct = null
+            }
+        )
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ProductItem(
-    product: Product,
-    onEdit: () -> Unit,
-    onDelete: () -> Unit,
-    onToggleAvailability: () -> Unit
-) {
+private fun ProductManagementCard(product: Product, onEdit: () -> Unit, onDelete: () -> Unit, onToggle: () -> Unit) {
+    val profit = product.profitPerItem
+    val hasCost = product.cost > 0.0
+
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = if (product.isAvailable) 
-                Surface else TextSecondary.copy(alpha = 0.1f)
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        shape = RoundedCornerShape(14.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(
-                modifier = Modifier.weight(1f)
-            ) {
-                Text(
-                    text = product.name,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = if (product.isAvailable) TextPrimary else TextSecondary
-                )
-                Text(
-                    text = "₱%.2f".format(product.price),
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = if (product.isAvailable) PrimaryGreen else TextSecondary
-                )
-                Text(
-                    text = product.category,
-                    fontSize = 14.sp,
-                    color = if (product.isAvailable) TextSecondary else TextSecondary
-                )
-                Text(
-                    text = if (product.isAvailable) "Available" else "Unavailable",
-                    fontSize = 12.sp,
-                    color = if (product.isAvailable) SuccessColor else ErrorColor,
-                    fontWeight = FontWeight.Medium
-                )
-            }
-            
+        Column(modifier = Modifier.padding(14.dp)) {
             Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                IconButton(
-                    onClick = onToggleAvailability,
-                    modifier = Modifier.size(40.dp)
-                ) {
-                    Icon(
-                        if (product.isAvailable) Icons.Default.Check else Icons.Default.Close,
-                        contentDescription = "Toggle Availability",
-                        tint = if (product.isAvailable) SuccessColor else ErrorColor,
-                        modifier = Modifier.size(20.dp)
-                    )
+                // Emoji avatar
+                Surface(shape = RoundedCornerShape(10.dp), color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.size(52.dp)) {
+                    Box(contentAlignment = Alignment.Center) { Text("🍢", style = MaterialTheme.typography.titleLarge) }
                 }
-                
-                IconButton(
-                    onClick = onEdit,
-                    modifier = Modifier.size(40.dp)
-                ) {
-                    Icon(
-                        Icons.Default.Edit,
-                        contentDescription = "Edit",
-                        tint = PrimaryGreen,
-                        modifier = Modifier.size(20.dp)
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(product.name, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
+                    Text(
+                        "Presyo: ${formatPeso(product.price)}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.SemiBold
                     )
+                    if (hasCost) {
+                        Text(
+                            "Puhunan: ${formatPeso(product.cost)}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Spacer(Modifier.height(4.dp))
+                    AvailabilityChip(isAvailable = product.isAvailable)
                 }
-                
-                IconButton(
-                    onClick = onDelete,
-                    modifier = Modifier.size(40.dp)
-                ) {
-                    Icon(
-                        Icons.Default.Delete,
-                        contentDescription = "Delete",
-                        tint = ErrorColor,
-                        modifier = Modifier.size(20.dp)
-                    )
+
+                Column(horizontalAlignment = Alignment.End) {
+                    // Profit badge
+                    if (hasCost) {
+                        Surface(
+                            color = if (profit > 0) MaterialTheme.colorScheme.tertiaryContainer
+                                    else MaterialTheme.colorScheme.errorContainer,
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text(
+                                text = "${if (profit >= 0) "+" else ""}${formatPeso(profit)}",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = if (profit > 0) MaterialTheme.colorScheme.onTertiaryContainer
+                                        else MaterialTheme.colorScheme.onErrorContainer,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
+                        Text(
+                            "kita/item",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+
+            // Action row
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Switch(
+                    checked = product.isAvailable,
+                    onCheckedChange = { onToggle() },
+                    modifier = Modifier.size(width = 48.dp, height = 28.dp)
+                )
+                Row {
+                    IconButton(onClick = onEdit, modifier = Modifier.size(40.dp)) {
+                        Icon(Icons.Default.Edit, "Edit", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                    }
+                    IconButton(onClick = onDelete, modifier = Modifier.size(40.dp)) {
+                        Icon(Icons.Default.Delete, "Delete", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(20.dp))
+                    }
                 }
             }
         }
@@ -283,130 +209,124 @@ fun ProductItem(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ProductDialog(
-    product: Product?,
-    onDismiss: () -> Unit,
-    onSave: (Product) -> Unit
-) {
-    var name by remember { mutableStateOf(product?.name ?: "") }
-    var price by remember { mutableStateOf(product?.price?.toString() ?: "") }
-    var category by remember { mutableStateOf(product?.category ?: "Street Food") }
-    var isAvailable by remember { mutableStateOf(product?.isAvailable ?: true) }
+private fun ProductFormSheet(existing: Product?, onDismiss: () -> Unit, onSave: (Product) -> Unit) {
+    var name by remember { mutableStateOf(existing?.name ?: "") }
+    var priceText by remember { mutableStateOf(existing?.price?.let { if (it == 0.0) "" else it.toString() } ?: "") }
+    var costText by remember { mutableStateOf(existing?.cost?.let { if (it == 0.0) "" else it.toString() } ?: "") }
+    var isAvailable by remember { mutableStateOf(existing?.isAvailable ?: true) }
+    var nameError by remember { mutableStateOf<String?>(null) }
+    var priceError by remember { mutableStateOf<String?>(null) }
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
+    // Auto-computed profit
+    val price = priceText.toDoubleOrNull() ?: 0.0
+    val cost = costText.toDoubleOrNull() ?: 0.0
+    val profit = price - cost
+
+    ModalBottomSheet(onDismissRequest = onDismiss, shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)) {
+        Column(modifier = Modifier.fillMaxWidth().padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Text(
-                text = if (product == null) "Add Product" else "Edit Product",
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold,
-                color = TextPrimary
+                if (existing == null) "Add Product" else "Edit Product",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold
             )
-        },
-        text = {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text("Product Name") },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    shape = RoundedCornerShape(12.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = PrimaryGreen,
-                        unfocusedBorderColor = TextSecondary
-                    )
-                )
-                
-                OutlinedTextField(
-                    value = price,
-                    onValueChange = { price = it },
-                    label = { Text("Price") },
-                    modifier = Modifier.fillMaxWidth(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    singleLine = true,
-                    shape = RoundedCornerShape(12.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = PrimaryGreen,
-                        unfocusedBorderColor = TextSecondary
-                    )
-                )
-                
-                OutlinedTextField(
-                    value = category,
-                    onValueChange = { category = it },
-                    label = { Text("Category") },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    shape = RoundedCornerShape(12.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = PrimaryGreen,
-                        unfocusedBorderColor = TextSecondary
-                    )
-                )
-                
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+
+            // Product Name
+            OutlinedTextField(
+                value = name,
+                onValueChange = { name = it.take(50); nameError = null },
+                label = { Text("Product Name") },
+                modifier = Modifier.fillMaxWidth(),
+                isError = nameError != null,
+                supportingText = nameError?.let { { Text(it, color = MaterialTheme.colorScheme.error) } },
+                shape = RoundedCornerShape(12.dp)
+            )
+
+            // Selling Price
+            OutlinedTextField(
+                value = priceText,
+                onValueChange = { priceText = it; priceError = null },
+                label = { Text("Presyo / Selling Price (₱)") },
+                modifier = Modifier.fillMaxWidth(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                isError = priceError != null,
+                supportingText = priceError?.let { { Text(it, color = MaterialTheme.colorScheme.error) } },
+                shape = RoundedCornerShape(12.dp),
+                leadingIcon = { Text("₱", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.primary) }
+            )
+
+            // Cost / Puhunan
+            OutlinedTextField(
+                value = costText,
+                onValueChange = { costText = it },
+                label = { Text("Puhunan / Cost (₱) — optional") },
+                modifier = Modifier.fillMaxWidth(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                shape = RoundedCornerShape(12.dp),
+                leadingIcon = { Text("₱", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            )
+
+            // Auto-computed profit display
+            if (price > 0 && cost > 0) {
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (profit >= 0) MaterialTheme.colorScheme.tertiaryContainer
+                                         else MaterialTheme.colorScheme.errorContainer
+                    ),
+                    shape = RoundedCornerShape(10.dp)
                 ) {
-                    Text(
-                        text = "Available",
-                        fontSize = 16.sp,
-                        color = TextPrimary
-                    )
-                    
-                    Switch(
-                        checked = isAvailable,
-                        onCheckedChange = { isAvailable = it },
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = PrimaryGreen,
-                            checkedTrackColor = SecondaryGreen.copy(alpha = 0.5f),
-                            uncheckedThumbColor = TextSecondary,
-                            uncheckedTrackColor = TextSecondary.copy(alpha = 0.3f)
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            "💰 Kita bawat item:",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = if (profit >= 0) MaterialTheme.colorScheme.onTertiaryContainer
+                                    else MaterialTheme.colorScheme.onErrorContainer
                         )
-                    )
+                        Text(
+                            "${if (profit >= 0) "+" else ""}${formatPeso(profit)}",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = if (profit >= 0) MaterialTheme.colorScheme.onTertiaryContainer
+                                    else MaterialTheme.colorScheme.onErrorContainer
+                        )
+                    }
                 }
             }
-        },
-        confirmButton = {
+
+            // Available toggle
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text("Available for sale", style = MaterialTheme.typography.bodyMedium)
+                Switch(checked = isAvailable, onCheckedChange = { isAvailable = it })
+            }
+
+            // Save button
             Button(
                 onClick = {
-                    val productPrice = price.toDoubleOrNull() ?: 0.0
-                    val newProduct = Product(
-                        id = product?.id ?: 0,
-                        name = name,
-                        price = productPrice,
-                        category = category,
-                        isAvailable = isAvailable
-                    )
-                    onSave(newProduct)
+                    val finalPrice = priceText.toDoubleOrNull()
+                    when {
+                        name.isBlank() -> nameError = "Product name cannot be empty"
+                        finalPrice == null || finalPrice <= 0 -> priceError = "Enter a valid selling price"
+                        else -> onSave(
+                            Product(
+                                id = existing?.id ?: "",
+                                name = name.trim(),
+                                price = finalPrice,
+                                cost = costText.toDoubleOrNull() ?: 0.0,
+                                isAvailable = isAvailable
+                            )
+                        )
+                    }
                 },
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = PrimaryGreen,
-                    contentColor = Surface
-                ),
-                enabled = name.isNotBlank() && price.isNotBlank() && price.toDoubleOrNull() != null && price.toDoubleOrNull()!! > 0
+                modifier = Modifier.fillMaxWidth().height(52.dp),
+                shape = RoundedCornerShape(12.dp)
             ) {
-                Text("Save")
+                Text("Save Product", fontWeight = FontWeight.Bold)
             }
-        },
-        dismissButton = {
-            OutlinedButton(
-                onClick = onDismiss,
-                shape = RoundedCornerShape(12.dp),
-                border = null,
-                colors = ButtonDefaults.outlinedButtonColors(
-                    contentColor = TextSecondary
-                )
-            ) {
-                Text("Cancel")
-            }
-        },
-        shape = RoundedCornerShape(16.dp),
-        containerColor = Surface
-    )
+            Spacer(Modifier.height(16.dp))
+        }
+    }
 }

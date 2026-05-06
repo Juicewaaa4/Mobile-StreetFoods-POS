@@ -1,10 +1,10 @@
 [
     {
-        "merged": "com.streetfood.pos.app-merged_res-4:/xml_backup_rules.xml.flat",
-        "source": "com.streetfood.pos.app-main-6:/xml/backup_rules.xml"
+        "merged": "com.streetfood.pos.app-merged_res-5:/xml_backup_rules.xml.flat",
+        "source": "com.streetfood.pos.app-main-7:/xml/backup_rules.xml"
     },
     {
-        "merged": "com.streetfood.pos.app-merged_res-4:/xml_data_extraction_rules.xml.flat",
-        "source": "com.streetfood.pos.app-main-6:/xml/data_extraction_rules.xml"
+        "merged": "com.streetfood.pos.app-merged_res-5:/xml_data_extraction_rules.xml.flat",
+        "source": "com.streetfood.pos.app-main-7:/xml/data_extraction_rules.xml"
     }
 ]

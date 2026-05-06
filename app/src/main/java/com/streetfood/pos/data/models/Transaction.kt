@@ -1,24 +1,18 @@
 package com.streetfood.pos.data.models
 
-import androidx.room.Entity
-import androidx.room.PrimaryKey
-
-@Entity(tableName = "transactions")
 data class Transaction(
-    @PrimaryKey(autoGenerate = true)
-    val id: Int = 0,
+    val id: String = "",
     val timestamp: Long = System.currentTimeMillis(),
-    val totalAmount: Double,
-    val cashReceived: Double,
-    val change: Double,
-    val cashierName: String,
+    val totalAmount: Double = 0.0,
+    val cashReceived: Double = 0.0,
+    val change: Double = 0.0,
+    val cashierName: String = "",
     val items: List<TransactionItem> = emptyList()
 )
 
 data class TransactionItem(
-    val transactionId: Int = 0,
-    val productName: String,
-    val quantity: Int,
-    val unitPrice: Double,
-    val totalPrice: Double
+    val productName: String = "",
+    val quantity: Int = 0,
+    val unitPrice: Double = 0.0,
+    val totalPrice: Double = 0.0
 )

@@ -1,76 +1,135 @@
 package com.streetfood.pos.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
-import androidx.navigation.compose.rememberNavController
-import com.streetfood.pos.data.database.AppDatabase
-import com.streetfood.pos.ui.screens.LoginScreen
-import com.streetfood.pos.ui.screens.HomeScreen
-import com.streetfood.pos.ui.screens.POSScreen
-import com.streetfood.pos.ui.screens.ProductManagementScreen
-import com.streetfood.pos.ui.screens.TransactionHistoryScreen
+import com.google.firebase.firestore.FirebaseFirestore
+import com.streetfood.pos.data.repository.UserSessionRepository
+import com.streetfood.pos.data.models.UserRole
+import com.streetfood.pos.ui.screens.*
+import com.streetfood.pos.viewmodel.*
+
+sealed class Screen(val route: String) {
+    object Login : Screen("login")
+    object CashierHome : Screen("cashier_home")
+    object AdminHome : Screen("admin_home")
+    object POS : Screen("pos")
+    object Payment : Screen("payment")
+    object Products : Screen("products")
+    object Analytics : Screen("analytics")
+    object History : Screen("history")
+}
 
 @Composable
 fun AppNavigation(
-    navController: NavHostController = rememberNavController(),
-    isLoggedIn: Boolean = false,
-    userRole: String? = null,
-    database: AppDatabase? = null
+    navController: NavHostController,
+    db: FirebaseFirestore,
+    authViewModel: AuthViewModel
 ) {
-    NavHost(
-        navController = navController,
-        startDestination = if (isLoggedIn) "home" else "login"
-    ) {
-        composable("login") {
+    // Shared ViewModel instances (so state is preserved across nav)
+    val posViewModel: POSViewModel = viewModel(factory = POSViewModelFactory(db))
+    val productViewModel: ProductViewModel = viewModel(factory = ProductViewModelFactory(db))
+    val transactionViewModel: TransactionViewModel = viewModel(factory = TransactionViewModelFactory(db))
+    val analyticsViewModel: AnalyticsViewModel = viewModel(factory = AnalyticsViewModelFactory(db))
+
+    val startDestination = Screen.Login.route
+
+    NavHost(navController = navController, startDestination = startDestination) {
+
+        composable(Screen.Login.route) {
             LoginScreen(
+                authViewModel = authViewModel,
                 onLoginSuccess = { role ->
-                    navController.navigate("home") {
-                        popUpTo("login") { inclusive = true }
+                    val dest = if (role == UserRole.ADMIN.name) Screen.AdminHome.route else Screen.CashierHome.route
+                    navController.navigate(dest) {
+                        popUpTo(Screen.Login.route) { inclusive = true }
                     }
                 }
             )
         }
-        
-        composable("home") {
-            HomeScreen(
-                userRole = userRole ?: "CASHIER",
-                onNavigateToPOS = { navController.navigate("pos") },
-                onNavigateToProductManagement = { navController.navigate("product_management") },
-                onNavigateToTransactionHistory = { navController.navigate("transaction_history") },
+
+        composable(Screen.CashierHome.route) {
+            CashierDashboard(
+                transactionViewModel = transactionViewModel,
+                onNavigateToPOS = { navController.navigate(Screen.POS.route) },
                 onLogout = {
-                    navController.navigate("login") {
-                        popUpTo("home") { inclusive = true }
+                    authViewModel.logout()
+                    navController.navigate(Screen.Login.route) {
+                        popUpTo(0) { inclusive = true }
                     }
                 }
             )
         }
-        
-        composable("pos") {
-            database?.let { db ->
-                POSScreen(
-                    onBack = { navController.popBackStack() },
-                    database = db
-                )
-            }
+
+        composable(Screen.AdminHome.route) {
+            AdminDashboard(
+                transactionViewModel = transactionViewModel,
+                analyticsViewModel = analyticsViewModel,
+                onNavigateToPOS = { navController.navigate(Screen.POS.route) },
+                onNavigateToProducts = { navController.navigate(Screen.Products.route) },
+                onNavigateToAnalytics = { navController.navigate(Screen.Analytics.route) },
+                onNavigateToHistory = { navController.navigate(Screen.History.route) },
+                onLogout = {
+                    authViewModel.logout()
+                    navController.navigate(Screen.Login.route) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                }
+            )
         }
-        
-        composable("product_management") {
-            database?.let { db ->
+
+        composable(Screen.POS.route) {
+            POSScreen(
+                posViewModel = posViewModel,
+                onBack = { navController.popBackStack() },
+                onProceedToPayment = { navController.navigate(Screen.Payment.route) }
+            )
+        }
+
+        composable(Screen.Payment.route) {
+            PaymentScreen(
+                posViewModel = posViewModel,
+                onBack = { navController.popBackStack() },
+                onNewTransaction = {
+                    navController.popBackStack(Screen.POS.route, inclusive = false)
+                }
+            )
+        }
+
+        // Admin-only screens with route guard
+        composable(Screen.Products.route) {
+            if (UserSessionRepository.isAdmin) {
                 ProductManagementScreen(
-                    onBack = { navController.popBackStack() },
-                    database = db
+                    productViewModel = productViewModel,
+                    onBack = { navController.popBackStack() }
                 )
+            } else {
+                navController.popBackStack()
             }
         }
-        
-        composable("transaction_history") {
-            database?.let { db ->
-                TransactionHistoryScreen(
-                    onBack = { navController.popBackStack() },
-                    database = db
+
+        composable(Screen.Analytics.route) {
+            if (UserSessionRepository.isAdmin) {
+                AnalyticsScreen(
+                    analyticsViewModel = analyticsViewModel,
+                    onBack = { navController.popBackStack() }
                 )
+            } else {
+                navController.popBackStack()
+            }
+        }
+
+        composable(Screen.History.route) {
+            if (UserSessionRepository.isAdmin) {
+                TransactionHistoryScreen(
+                    transactionViewModel = transactionViewModel,
+                    onBack = { navController.popBackStack() }
+                )
+            } else {
+                navController.popBackStack()
             }
         }
     }

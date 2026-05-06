@@ -1,6 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Zoey\'s Street Foods</string>
+    <string name="gcm_defaultSenderId" translatable="false">629142273804</string>
+    <string name="google_api_key" translatable="false">AIzaSyAhXBR5ExHK6kEus0mMfoChr4msQ6-Ofxg</string>
+    <string name="google_app_id" translatable="false">1:629142273804:android:39be567dbcfda43a39d329</string>
+    <string name="google_crash_reporting_api_key" translatable="false">AIzaSyAhXBR5ExHK6kEus0mMfoChr4msQ6-Ofxg</string>
+    <string name="google_storage_bucket" translatable="false">streetfoods-a4dd7.firebasestorage.app</string>
+    <string name="project_id" translatable="false">streetfoods-a4dd7</string>
     <style name="Theme.StreetFoodPOS" parent="android:Theme.Material.Light.NoActionBar">
     </style>
 </resources>
