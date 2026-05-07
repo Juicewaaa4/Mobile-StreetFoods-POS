@@ -50,7 +50,7 @@ fun ProductManagementScreen(
     ) { padding ->
         when (val state = productsState) {
             is UiState.Loading -> LoadingIndicator()
-            is UiState.Empty -> EmptyStateView("🍢", "No Products Yet", "Tap + to add your first product.", modifier = Modifier.padding(padding))
+            is UiState.Empty -> EmptyStateView("", "No Products Yet", "Tap + to add your first product.", modifier = Modifier.padding(padding))
             is UiState.Success -> {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp),
@@ -58,12 +58,15 @@ fun ProductManagementScreen(
                     contentPadding = PaddingValues(vertical = 12.dp)
                 ) {
                     items(state.data, key = { it.id }) { product ->
-                        ProductManagementCard(
+                        ProductManagementRow(
                             product = product,
                             onEdit = { editProduct = product },
                             onDelete = { deleteProduct = product },
-                            onToggle = { productViewModel.toggleAvailability(product) }
+                            onToggle = { productViewModel.toggleAvailability(product) },
+                            onIncreasePrice = { productViewModel.updateProduct(product.copy(price = (product.price + 1.0).coerceAtMost(999999.0))) },
+                            onDecreasePrice = { productViewModel.updateProduct(product.copy(price = (product.price - 1.0).coerceAtLeast(0.0))) }
                         )
+                        Divider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant)
                     }
                     item { Spacer(Modifier.height(80.dp)) }
                 }
@@ -117,91 +120,45 @@ fun ProductManagementScreen(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ProductManagementCard(product: Product, onEdit: () -> Unit, onDelete: () -> Unit, onToggle: () -> Unit) {
-    val profit = product.profitPerItem
-    val hasCost = product.cost > 0.0
-
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+private fun ProductManagementRow(
+    product: Product,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+    onToggle: () -> Unit,
+    onIncreasePrice: () -> Unit,
+    onDecreasePrice: () -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Column(modifier = Modifier.padding(14.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                // Emoji avatar
-                Surface(shape = RoundedCornerShape(10.dp), color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.size(52.dp)) {
-                    Box(contentAlignment = Alignment.Center) { Text("🍢", style = MaterialTheme.typography.titleLarge) }
-                }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(product.name, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
+            Text("Presyo: ${formatPeso(product.price)}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
+        }
 
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(product.name, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
-                    Text(
-                        "Presyo: ${formatPeso(product.price)}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    if (hasCost) {
-                        Text(
-                            "Puhunan: ${formatPeso(product.cost)}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    Spacer(Modifier.height(4.dp))
-                    AvailabilityChip(isAvailable = product.isAvailable)
-                }
-
-                Column(horizontalAlignment = Alignment.End) {
-                    // Profit badge
-                    if (hasCost) {
-                        Surface(
-                            color = if (profit > 0) MaterialTheme.colorScheme.tertiaryContainer
-                                    else MaterialTheme.colorScheme.errorContainer,
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Text(
-                                text = "${if (profit >= 0) "+" else ""}${formatPeso(profit)}",
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = if (profit > 0) MaterialTheme.colorScheme.onTertiaryContainer
-                                        else MaterialTheme.colorScheme.onErrorContainer,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                            )
-                        }
-                        Text(
-                            "kita/item",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+            IconButton(onClick = onDecreasePrice, modifier = Modifier.size(40.dp)) {
+                Icon(Icons.Default.RemoveCircleOutline, contentDescription = "Minus price")
             }
+            IconButton(onClick = onIncreasePrice, modifier = Modifier.size(40.dp)) {
+                Icon(Icons.Default.AddCircleOutline, contentDescription = "Add price")
+            }
+        }
 
-            // Action row
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Switch(
-                    checked = product.isAvailable,
-                    onCheckedChange = { onToggle() },
-                    modifier = Modifier.size(width = 48.dp, height = 28.dp)
-                )
-                Row {
-                    IconButton(onClick = onEdit, modifier = Modifier.size(40.dp)) {
-                        Icon(Icons.Default.Edit, "Edit", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
-                    }
-                    IconButton(onClick = onDelete, modifier = Modifier.size(40.dp)) {
-                        Icon(Icons.Default.Delete, "Delete", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(20.dp))
-                    }
-                }
+        Switch(
+            checked = product.isAvailable,
+            onCheckedChange = { onToggle() },
+            modifier = Modifier.size(width = 48.dp, height = 28.dp)
+        )
+
+        Row {
+            IconButton(onClick = onEdit, modifier = Modifier.size(40.dp)) {
+                Icon(Icons.Default.Edit, "Edit", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+            }
+            IconButton(onClick = onDelete, modifier = Modifier.size(40.dp)) {
+                Icon(Icons.Default.Delete, "Delete", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(20.dp))
             }
         }
     }
@@ -280,7 +237,7 @@ private fun ProductFormSheet(existing: Product?, onDismiss: () -> Unit, onSave: 
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            "💰 Kita bawat item:",
+                            "Kita bawat item:",
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.SemiBold,
                             color = if (profit >= 0) MaterialTheme.colorScheme.onTertiaryContainer

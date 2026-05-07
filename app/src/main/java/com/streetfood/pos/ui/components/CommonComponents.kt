@@ -33,7 +33,9 @@ fun EmptyStateView(emoji: String, title: String, subtitle: String, modifier: Mod
             verticalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier.padding(32.dp)
         ) {
-            Text(text = emoji, fontSize = 64.sp)
+            if (emoji.isNotBlank()) {
+                Text(text = emoji, fontSize = 64.sp)
+            }
             Text(text = title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface, textAlign = TextAlign.Center)
             Text(text = subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
         }

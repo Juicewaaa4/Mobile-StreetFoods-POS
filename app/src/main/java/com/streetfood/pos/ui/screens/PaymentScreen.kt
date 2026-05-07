@@ -33,6 +33,8 @@ fun PaymentScreen(
     val totalAmount by posViewModel.totalAmount.collectAsStateWithLifecycle()
     val isProcessing by posViewModel.isProcessingPayment.collectAsStateWithLifecycle()
     val transactionSuccess by posViewModel.transactionSuccess.collectAsStateWithLifecycle()
+    val paymentError by posViewModel.paymentError.collectAsStateWithLifecycle()
+    val snackbarHostState = remember { SnackbarHostState() }
 
     // Cash digits buffer (e.g. "1250" → ₱12.50)
     var cashDigits by remember { mutableStateOf("") }
@@ -44,13 +46,20 @@ fun PaymentScreen(
 
     // Snapshot of completed transaction for receipt
     var receiptData by remember { mutableStateOf<ReceiptData?>(null) }
+    var pendingReceiptItems by remember { mutableStateOf<List<CartItem>>(emptyList()) }
 
     // Show success dialog when transaction completes
     LaunchedEffect(transactionSuccess) {
         if (transactionSuccess) {
-            receiptData = ReceiptData(cart.toList(), totalAmount, cashValue, change)
+            receiptData = ReceiptData(pendingReceiptItems, totalAmount, cashValue, change)
             posViewModel.consumeTransactionSuccess()
         }
+    }
+
+    LaunchedEffect(paymentError) {
+        val msg = paymentError ?: return@LaunchedEffect
+        snackbarHostState.showSnackbar(message = msg, withDismissAction = true)
+        posViewModel.consumePaymentError()
     }
 
     Scaffold(
@@ -60,7 +69,8 @@ fun PaymentScreen(
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "Back") } },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
             )
-        }
+        },
+        snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { padding ->
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp),
@@ -68,56 +78,47 @@ fun PaymentScreen(
         ) {
             // Order summary
             item {
-                Card(shape = RoundedCornerShape(16.dp), elevation = CardDefaults.cardElevation(2.dp)) {
-                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("Order Summary", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        Divider()
-                        cart.forEach { item ->
-                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text("${item.quantity}× ${item.product.name}", style = MaterialTheme.typography.bodyMedium)
-                                Text(formatPeso(item.totalPrice), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-                            }
-                        }
-                        Divider()
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Order Summary", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Divider()
+                    cart.forEach { item ->
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text("TOTAL DUE", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
-                            Text(formatPeso(totalAmount), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.primary)
+                            Text("${item.quantity}× ${item.product.name}", style = MaterialTheme.typography.bodyMedium)
+                            Text(formatPeso(item.totalPrice), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
                         }
+                    }
+                    Divider()
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text("Total", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Text(formatPeso(totalAmount), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.primary)
                     }
                 }
             }
 
             // Cash display
             item {
-                Card(
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
-                    elevation = CardDefaults.cardElevation(2.dp)
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Column(modifier = Modifier.fillMaxWidth().padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("Cash Received", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f))
-                        Text(
-                            text = if (cashDigits.isEmpty()) "₱0.00" else formatDigitsAsPeso(cashDigits),
-                            style = MaterialTheme.typography.displaySmall,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
+                    Text("Cash Received", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text(
+                        text = if (cashDigits.isEmpty()) "₱0.00" else formatDigitsAsPeso(cashDigits),
+                        style = MaterialTheme.typography.displaySmall,
+                        fontWeight = FontWeight.ExtraBold
+                    )
 
-                        // Change display
-                        if (cashDigits.isNotEmpty()) {
-                            Divider(color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.3f))
-                            if (isSufficient) {
-                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    Text("Change:", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onPrimaryContainer.copy(0.7f))
-                                    // Animated change value
-                                    val animatedChange by animateFloatAsState(targetValue = change.toFloat(), animationSpec = tween(300), label = "change")
-                                    Text(formatPeso(animatedChange.toDouble()), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.onPrimaryContainer)
-                                }
-                            } else {
-                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                    Icon(Icons.Default.Warning, null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
-                                    Text("Insufficient amount", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
-                                }
+                    if (cashDigits.isNotEmpty()) {
+                        if (isSufficient) {
+                            val animatedChange by animateFloatAsState(targetValue = change.toFloat(), animationSpec = tween(300), label = "change")
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text("Change", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                                Text(formatPeso(animatedChange.toDouble()), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.ExtraBold)
+                            }
+                        } else {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Icon(Icons.Default.Warning, null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
+                                Text("Insufficient amount", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
                             }
                         }
                     }
@@ -141,7 +142,10 @@ fun PaymentScreen(
             // Complete Transaction button
             item {
                 Button(
-                    onClick = { posViewModel.processTransaction(cashDigits) },
+                    onClick = {
+                        pendingReceiptItems = cart.toList()
+                        posViewModel.processTransaction(cashDigits)
+                    },
                     modifier = Modifier.fillMaxWidth().height(56.dp),
                     shape = RoundedCornerShape(14.dp),
                     enabled = isSufficient && !isProcessing
@@ -164,7 +168,7 @@ fun PaymentScreen(
     receiptData?.let { data ->
         TransactionSuccessDialog(
             data = data,
-            onNewTransaction = { receiptData = null; onNewTransaction() },
+            onNewTransaction = { receiptData = null; pendingReceiptItems = emptyList(); onNewTransaction() },
             onViewReceipt = { showReceipt = true }
         )
     }
@@ -179,7 +183,7 @@ fun PaymentScreen(
                 ReceiptSheet(
                     data = data,
                     cashierName = com.streetfood.pos.data.repository.UserSessionRepository.username,
-                    onClose = { showReceipt = false; receiptData = null; onNewTransaction() }
+                    onClose = { showReceipt = false; receiptData = null; pendingReceiptItems = emptyList(); onNewTransaction() }
                 )
             }
         }
@@ -202,7 +206,7 @@ private fun TransactionSuccessDialog(data: ReceiptData, onNewTransaction: () -> 
                 LaunchedEffect(Unit) { visible = true }
                 AnimatedVisibility(visible = visible, enter = scaleIn(spring(dampingRatio = Spring.DampingRatioMediumBouncy)) + fadeIn()) {
                     Surface(shape = RoundedCornerShape(50), color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.size(80.dp)) {
-                        Box(contentAlignment = Alignment.Center) { Text("✅", fontSize = 44.sp) }
+                        Box(contentAlignment = Alignment.Center) { Icon(Icons.Default.CheckCircle, null, modifier = Modifier.size(48.dp), tint = MaterialTheme.colorScheme.primary) }
                     }
                 }
 
@@ -242,7 +246,7 @@ private fun SummaryRow(label: String, value: String, highlight: Boolean = false)
 private fun ReceiptSheet(data: ReceiptData, cashierName: String, onClose: () -> Unit) {
     val dateStr = remember { java.text.SimpleDateFormat("MMM dd, yyyy hh:mm a", java.util.Locale.getDefault()).format(java.util.Date()) }
     Column(modifier = Modifier.fillMaxWidth().padding(24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text("🍢 Zoey's Street Foods", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
+        Text("Zoey's Street Foods", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
         Text(dateStr, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
         Text("Cashier: $cashierName", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
         Divider()

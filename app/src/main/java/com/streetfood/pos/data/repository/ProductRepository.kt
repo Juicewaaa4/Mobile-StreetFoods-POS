@@ -51,13 +51,29 @@ class ProductRepository(private val db: FirebaseFirestore) {
 
     suspend fun insertProduct(product: Product) {
         val docRef = productsCollection.document()
-        val productWithId = product.copy(id = docRef.id)
-        docRef.set(productWithId).await()
+        // Keep document ID in Firestore doc id (not as a field) to avoid rules/merging issues.
+        docRef.set(
+            mapOf(
+                "name" to product.name,
+                "price" to product.price,
+                "cost" to product.cost,
+                "category" to product.category,
+                "isAvailable" to product.isAvailable
+            )
+        ).await()
     }
 
     suspend fun updateProduct(product: Product) {
         if (product.id.isNotEmpty()) {
-            productsCollection.document(product.id).set(product).await()
+            productsCollection.document(product.id).set(
+                mapOf(
+                    "name" to product.name,
+                    "price" to product.price,
+                    "cost" to product.cost,
+                    "category" to product.category,
+                    "isAvailable" to product.isAvailable
+                )
+            ).await()
         }
     }
 

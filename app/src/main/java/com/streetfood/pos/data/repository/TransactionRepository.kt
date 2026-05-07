@@ -73,7 +73,16 @@ class TransactionRepository(private val db: FirebaseFirestore) {
 
     suspend fun insertTransaction(transaction: Transaction) {
         val docRef = transactionsCollection.document()
-        val transactionWithId = transaction.copy(id = docRef.id)
-        docRef.set(transactionWithId).await()
+        // Keep document ID in Firestore doc id (not as a field) to avoid rules/merging issues.
+        docRef.set(
+            mapOf(
+                "timestamp" to transaction.timestamp,
+                "totalAmount" to transaction.totalAmount,
+                "cashReceived" to transaction.cashReceived,
+                "change" to transaction.change,
+                "cashierName" to transaction.cashierName,
+                "items" to transaction.items
+            )
+        ).await()
     }
 }

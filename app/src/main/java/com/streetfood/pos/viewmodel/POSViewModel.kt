@@ -6,6 +6,7 @@ import com.streetfood.pos.data.models.*
 import com.streetfood.pos.data.repository.ProductRepository
 import com.streetfood.pos.data.repository.TransactionRepository
 import com.streetfood.pos.data.repository.UserSessionRepository
+import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
@@ -50,6 +51,9 @@ class POSViewModel(
     private val _isProcessingPayment = MutableStateFlow(false)
     val isProcessingPayment: StateFlow<Boolean> = _isProcessingPayment.asStateFlow()
 
+    private val _paymentError = MutableStateFlow<String?>(null)
+    val paymentError: StateFlow<String?> = _paymentError.asStateFlow()
+
     /** How many of a given product are in the cart — used for badge display. */
     fun cartQtyFor(productId: String): Int = _cart.value.find { it.product.id == productId }?.quantity ?: 0
 
@@ -93,6 +97,18 @@ class POSViewModel(
         recalcTotal()
     }
 
+    fun removeOneFromCart(product: Product) {
+        val current = _cart.value.toMutableList()
+        val idx = current.indexOfFirst { it.product.id == product.id }
+        if (idx >= 0) {
+            val existing = current[idx]
+            if (existing.quantity <= 1) current.removeAt(idx)
+            else current[idx] = existing.copy(quantity = existing.quantity - 1)
+            _cart.value = current
+            recalcTotal()
+        }
+    }
+
     fun updateQuantity(cartItem: CartItem, qty: Int) {
         if (qty <= 0) removeFromCart(cartItem) else {
             _cart.value = _cart.value.map { if (it.product.id == cartItem.product.id) it.copy(quantity = qty) else it }
@@ -120,6 +136,7 @@ class POSViewModel(
 
         viewModelScope.launch {
             _isProcessingPayment.value = true
+            _paymentError.value = null
             try {
                 val cashierName = UserSessionRepository.username
                 val transaction = Transaction(
@@ -131,10 +148,13 @@ class POSViewModel(
                         TransactionItem(productName = it.product.name, quantity = it.quantity, unitPrice = it.product.price, totalPrice = it.totalPrice)
                     }
                 )
-                transactionRepo.insertTransaction(transaction)
+                withTimeout(15_000) {
+                    transactionRepo.insertTransaction(transaction)
+                }
                 clearCart()
                 _transactionSuccess.value = true
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                _paymentError.value = e.message ?: "Payment failed. Please try again."
             } finally {
                 _isProcessingPayment.value = false
             }
@@ -143,4 +163,6 @@ class POSViewModel(
     }
 
     fun consumeTransactionSuccess() { _transactionSuccess.value = false }
+
+    fun consumePaymentError() { _paymentError.value = null }
 }

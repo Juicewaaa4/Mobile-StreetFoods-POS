@@ -2,8 +2,8 @@ package com.streetfood.pos.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.grid.*
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -125,25 +125,24 @@ fun POSScreen(
             // Product grid
             if (filteredProducts.isEmpty()) {
                 EmptyStateView(
-                    "🔍", "No products found",
+                    "", "No products found",
                     if (searchQuery.isNotBlank()) "No results for \"$searchQuery\""
                     else "No products in this category."
                 )
             } else {
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(2),
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    modifier = Modifier.fillMaxSize()
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    items(filteredProducts.size) { index ->
-                        val product = filteredProducts[index]
-                        ProductGridCard(
+                    items(filteredProducts, key = { it.id }) { product ->
+                        ProductListRow(
                             product = product,
-                            cartQty = posViewModel.cartQtyFor(product.id),
-                            onAddToCart = { posViewModel.addToCart(product) }
+                            qty = posViewModel.cartQtyFor(product.id),
+                            onIncrease = { posViewModel.addToCart(product) },
+                            onDecrease = { posViewModel.removeOneFromCart(product) }
                         )
+                        Divider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant)
                     }
                 }
             }
@@ -171,91 +170,50 @@ fun POSScreen(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ProductGridCard(product: Product, cartQty: Int, onAddToCart: () -> Unit) {
-    // Derive a deterministic color from the product name for the avatar
-    val avatarColors = listOf(Color(0xFF81C784), Color(0xFF64B5F6), Color(0xFFFFB74D), Color(0xFFBA68C8), Color(0xFF4DB6AC))
-    val avatarColor = avatarColors[product.name.length % avatarColors.size]
-    val emoji = when {
-        product.name.contains("fish", ignoreCase = true) -> "🐟"
-        product.name.contains("kwek", ignoreCase = true) -> "🥚"
-        product.name.contains("squid", ignoreCase = true) -> "🦑"
-        product.name.contains("chicken", ignoreCase = true) -> "🍗"
-        product.name.contains("hotdog", ignoreCase = true) -> "🌭"
-        product.name.contains("banana", ignoreCase = true) -> "🍌"
-        product.name.contains("camote", ignoreCase = true) -> "🍠"
-        product.name.contains("saging", ignoreCase = true) -> "🍌"
-        else -> "🍢"
-    }
-
-    Card(
-        modifier = Modifier.fillMaxWidth().aspectRatio(0.85f),
-        shape = RoundedCornerShape(16.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = if (product.isAvailable) MaterialTheme.colorScheme.surface
-            else MaterialTheme.colorScheme.surfaceVariant
-        )
+private fun ProductListRow(
+    product: Product,
+    qty: Int,
+    onIncrease: () -> Unit,
+    onDecrease: () -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Column(
-            modifier = Modifier.fillMaxSize().padding(12.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.SpaceBetween
-        ) {
-            // Badge + Avatar
-            BadgedBox(
-                badge = {
-                    if (cartQty > 0) Badge(containerColor = MaterialTheme.colorScheme.primary) { Text(cartQty.toString(), fontSize = 11.sp) }
-                }
-            ) {
-                Box(
-                    modifier = Modifier.size(64.dp).clip(RoundedCornerShape(14.dp)).background(avatarColor.copy(alpha = if (product.isAvailable) 0.25f else 0.12f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(emoji, fontSize = 30.sp)
-                }
-            }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = product.name,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                color = if (product.isAvailable) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = formatPeso(product.price),
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (product.isAvailable) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
 
-            // Name & Price
-            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(
-                    text = product.name,
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Bold,
-                    textAlign = TextAlign.Center,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    color = if (product.isAvailable) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Text(
-                    text = formatPeso(product.price),
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = if (product.isAvailable) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
+        if (!product.isAvailable) {
+            Text("Unavailable", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            return
+        }
 
-            // Add button
-            if (product.isAvailable) {
-                Button(
-                    onClick = onAddToCart,
-                    modifier = Modifier.fillMaxWidth().height(40.dp),
-                    shape = RoundedCornerShape(10.dp),
-                    contentPadding = PaddingValues(horizontal = 8.dp)
-                ) {
-                    Icon(Icons.Default.Add, null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text("Add", fontWeight = FontWeight.Bold)
-                }
-            } else {
-                Surface(
-                    shape = RoundedCornerShape(10.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant,
-                    modifier = Modifier.fillMaxWidth().height(40.dp)
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Text("Unavailable", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            IconButton(onClick = onDecrease, enabled = qty > 0, modifier = Modifier.size(40.dp)) {
+                Icon(Icons.Default.RemoveCircleOutline, contentDescription = "Minus")
+            }
+            Text(
+                qty.toString(),
+                modifier = Modifier.widthIn(min = 28.dp),
+                textAlign = TextAlign.Center,
+                fontWeight = FontWeight.Bold
+            )
+            IconButton(onClick = onIncrease, modifier = Modifier.size(40.dp)) {
+                Icon(Icons.Default.AddCircleOutline, contentDescription = "Add")
             }
         }
     }
