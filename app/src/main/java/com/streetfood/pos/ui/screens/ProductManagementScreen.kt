@@ -33,6 +33,12 @@ fun ProductManagementScreen(
     var deleteProduct by remember { mutableStateOf<Product?>(null) }
     var pendingUndo by remember { mutableStateOf<Product?>(null) }
 
+    LaunchedEffect(Unit) {
+        productViewModel.userMessages.collect { msg ->
+            snackbarHostState.showSnackbar(msg, withDismissAction = true)
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -63,15 +69,25 @@ fun ProductManagementScreen(
                             onEdit = { editProduct = product },
                             onDelete = { deleteProduct = product },
                             onToggle = { productViewModel.toggleAvailability(product) },
-                            onIncreasePrice = { productViewModel.updateProduct(product.copy(price = (product.price + 1.0).coerceAtMost(999999.0))) },
-                            onDecreasePrice = { productViewModel.updateProduct(product.copy(price = (product.price - 1.0).coerceAtLeast(0.0))) }
+                            onIncreasePrice = {
+                                productViewModel.updateProduct(
+                                    product.copy(price = (product.price + 1.0).coerceAtMost(999_999.0)),
+                                    notify = false
+                                )
+                            },
+                            onDecreasePrice = {
+                                productViewModel.updateProduct(
+                                    product.copy(price = (product.price - 1.0).coerceAtLeast(0.0)),
+                                    notify = false
+                                )
+                            }
                         )
                         Divider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant)
                     }
                     item { Spacer(Modifier.height(80.dp)) }
                 }
             }
-            is UiState.Error -> EmptyStateView("⚠️", "Error", state.message, modifier = Modifier.padding(padding))
+            is UiState.Error -> EmptyStateView("", "May problema sa listahan", state.message, modifier = Modifier.padding(padding))
         }
     }
 
@@ -138,12 +154,19 @@ private fun ProductManagementRow(
             Text("Presyo: ${formatPeso(product.price)}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
         }
 
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-            IconButton(onClick = onDecreasePrice, modifier = Modifier.size(40.dp)) {
-                Icon(Icons.Default.RemoveCircleOutline, contentDescription = "Minus price")
-            }
-            IconButton(onClick = onIncreasePrice, modifier = Modifier.size(40.dp)) {
-                Icon(Icons.Default.AddCircleOutline, contentDescription = "Add price")
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(
+                "Presyo ±₱1",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                IconButton(onClick = onDecreasePrice, modifier = Modifier.size(48.dp)) {
+                    Icon(Icons.Default.RemoveCircleOutline, contentDescription = "Bawas presyo ng 1 piso")
+                }
+                IconButton(onClick = onIncreasePrice, modifier = Modifier.size(48.dp)) {
+                    Icon(Icons.Default.AddCircleOutline, contentDescription = "Dagdag presyo ng 1 piso")
+                }
             }
         }
 

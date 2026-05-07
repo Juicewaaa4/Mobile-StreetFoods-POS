@@ -6,9 +6,11 @@ import com.streetfood.pos.data.models.*
 import com.streetfood.pos.data.repository.ProductRepository
 import com.streetfood.pos.data.repository.TransactionRepository
 import com.streetfood.pos.data.repository.UserSessionRepository
-import kotlinx.coroutines.withTimeout
+import com.streetfood.pos.util.mapFirestoreOrNetworkError
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeout
 
 enum class ProductFilterMode { ALL, AVAILABLE, UNAVAILABLE }
 
@@ -54,30 +56,62 @@ class POSViewModel(
     private val _paymentError = MutableStateFlow<String?>(null)
     val paymentError: StateFlow<String?> = _paymentError.asStateFlow()
 
+    private val _productsLoadError = MutableStateFlow<String?>(null)
+    val productsLoadError: StateFlow<String?> = _productsLoadError.asStateFlow()
+
+    private var productsListenerJob: Job? = null
+    private var isSeedingDefaultProducts = false
+
     /** How many of a given product are in the cart — used for badge display. */
     fun cartQtyFor(productId: String): Int = _cart.value.find { it.product.id == productId }?.quantity ?: 0
 
     init {
-        viewModelScope.launch {
-            productRepo.getAllProducts().collect { products ->
-                _allProducts.value = products
-                if (products.isEmpty()) initializeDefaultProducts()
+        startProductsListener()
+    }
+
+    private fun startProductsListener() {
+        productsListenerJob?.cancel()
+        productsListenerJob = viewModelScope.launch {
+            try {
+                productRepo.getAllProducts().collect { products ->
+                    _productsLoadError.value = null
+                    _allProducts.value = products
+                    if (products.isEmpty() && !isSeedingDefaultProducts) {
+                        initializeDefaultProducts()
+                    }
+                }
+            } catch (e: Exception) {
+                _productsLoadError.value = mapFirestoreOrNetworkError(e)
             }
         }
     }
 
+    fun retryProductsLoad() {
+        _productsLoadError.value = null
+        startProductsListener()
+    }
+
+    fun dismissProductsLoadBanner() {
+        _productsLoadError.value = null
+    }
+
     private fun initializeDefaultProducts() {
         viewModelScope.launch {
-            listOf(
-                Product(name = "Fishball",        price = 30.0,  cost = 15.0),
-                Product(name = "Kwek-Kwek",       price = 40.0,  cost = 20.0),
-                Product(name = "Squidball",       price = 35.0,  cost = 18.0),
-                Product(name = "Chicken Balls",   price = 45.0,  cost = 22.0),
-                Product(name = "Hotdog on Stick", price = 50.0,  cost = 25.0),
-                Product(name = "Banana Cue",      price = 25.0,  cost = 10.0),
-                Product(name = "Camote Cue",      price = 25.0,  cost = 10.0),
-                Product(name = "Saging na Saba",  price = 20.0,  cost = 8.0)
-            ).forEach { productRepo.insertProduct(it) }
+            isSeedingDefaultProducts = true
+            try {
+                listOf(
+                    Product(name = "Fishball",        price = 30.0,  cost = 15.0),
+                    Product(name = "Kwek-Kwek",       price = 40.0,  cost = 20.0),
+                    Product(name = "Squidball",       price = 35.0,  cost = 18.0),
+                    Product(name = "Chicken Balls",   price = 45.0,  cost = 22.0),
+                    Product(name = "Hotdog on Stick", price = 50.0,  cost = 25.0),
+                    Product(name = "Banana Cue",      price = 25.0,  cost = 10.0),
+                    Product(name = "Camote Cue",      price = 25.0,  cost = 10.0),
+                    Product(name = "Saging na Saba",  price = 20.0,  cost = 8.0)
+                ).forEach { productRepo.insertProduct(it) }
+            } finally {
+                isSeedingDefaultProducts = false
+            }
         }
     }
 
@@ -131,6 +165,7 @@ class POSViewModel(
     }
 
     fun processTransaction(cashDigits: String): Boolean {
+        if (_isProcessingPayment.value) return false
         val cash = cashDigits.toDoubleOrNull()?.div(100.0) ?: 0.0
         if (_cart.value.isEmpty() || cash < _totalAmount.value) return false
 
@@ -154,7 +189,7 @@ class POSViewModel(
                 clearCart()
                 _transactionSuccess.value = true
             } catch (e: Exception) {
-                _paymentError.value = e.message ?: "Payment failed. Please try again."
+                _paymentError.value = mapFirestoreOrNetworkError(e)
             } finally {
                 _isProcessingPayment.value = false
             }

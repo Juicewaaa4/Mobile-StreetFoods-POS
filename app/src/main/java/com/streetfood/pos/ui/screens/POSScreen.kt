@@ -1,8 +1,9 @@
 package com.streetfood.pos.ui.screens
 
-import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -11,8 +12,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -38,14 +37,15 @@ fun POSScreen(
     val filteredProducts by posViewModel.filteredProducts.collectAsStateWithLifecycle()
     val cart by posViewModel.cart.collectAsStateWithLifecycle()
     val total by posViewModel.totalAmount.collectAsStateWithLifecycle()
+    val productsLoadError by posViewModel.productsLoadError.collectAsStateWithLifecycle()
 
     var showCartSheet by remember { mutableStateOf(false) }
     val cartSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     val filterOptions = listOf(
-        ProductFilterMode.ALL to "All",
+        ProductFilterMode.ALL to "Lahat / All",
         ProductFilterMode.AVAILABLE to "Available",
-        ProductFilterMode.UNAVAILABLE to "Unavailable"
+        ProductFilterMode.UNAVAILABLE to "Hindi available"
     )
 
     Scaffold(
@@ -59,45 +59,81 @@ fun POSScreen(
             )
         },
         bottomBar = {
-            // Sticky cart bar
-            if (cart.isNotEmpty()) {
-                Surface(shadowElevation = 8.dp, tonalElevation = 4.dp) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(12.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
+            Surface(shadowElevation = 8.dp, tonalElevation = 4.dp) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OutlinedButton(
+                        onClick = { if (cart.isNotEmpty()) showCartSheet = true },
+                        enabled = cart.isNotEmpty(),
+                        modifier = Modifier.weight(1f).height(52.dp),
+                        shape = RoundedCornerShape(12.dp)
                     ) {
-                        OutlinedButton(
-                            onClick = { showCartSheet = true },
-                            modifier = Modifier.weight(1f).height(52.dp),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            BadgedBox(badge = { Badge { Text(cart.size.toString()) } }) {
-                                Icon(Icons.Default.ShoppingCart, null, modifier = Modifier.size(22.dp))
-                            }
-                            Spacer(Modifier.width(8.dp))
-                            Text("View Cart — ${formatPeso(total)}", fontWeight = FontWeight.Medium)
+                        BadgedBox(badge = { if (cart.isNotEmpty()) Badge { Text(cart.size.toString()) } }) {
+                            Icon(Icons.Default.ShoppingCart, contentDescription = "Cart", modifier = Modifier.size(22.dp))
                         }
-                        Button(
-                            onClick = onProceedToPayment,
-                            modifier = Modifier.weight(1f).height(52.dp),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Text("Pay", fontWeight = FontWeight.Bold)
-                        }
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            if (cart.isEmpty()) "Cart — walang laman (${formatPeso(0.0)})"
+                            else "Tingnan ang cart — ${formatPeso(total)}",
+                            fontWeight = FontWeight.Medium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    Button(
+                        onClick = onProceedToPayment,
+                        enabled = cart.isNotEmpty(),
+                        modifier = Modifier.weight(1f).height(52.dp),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("Mag-bayad / Pay", fontWeight = FontWeight.Bold)
                     }
                 }
             }
         }
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+            productsLoadError?.let { msg ->
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            msg,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            modifier = Modifier.weight(1f)
+                        )
+                        TextButton(onClick = { posViewModel.retryProductsLoad() }) {
+                            Text("Retry")
+                        }
+                        IconButton(onClick = { posViewModel.dismissProductsLoadBanner() }) {
+                            Icon(Icons.Default.Close, contentDescription = "Dismiss")
+                        }
+                    }
+                }
+            }
+
             // Search bar
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = { posViewModel.setSearchQuery(it) },
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-                placeholder = { Text("Search products...") },
-                leadingIcon = { Icon(Icons.Default.Search, null) },
+                placeholder = { Text("Hanapin ang produkto / Search...") },
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search") },
                 trailingIcon = {
                     if (searchQuery.isNotBlank()) IconButton(onClick = { posViewModel.setSearchQuery("") }) { Icon(Icons.Default.Clear, null) }
                 },
@@ -106,17 +142,19 @@ fun POSScreen(
             )
 
             // Filter chips
-            Row(
+            LazyRow(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 filterOptions.forEach { (mode, label) ->
-                    FilterChip(
-                        selected = filterMode == mode,
-                        onClick = { posViewModel.setFilterMode(mode) },
-                        label = { Text(label) },
-                        shape = RoundedCornerShape(50.dp)
-                    )
+                    item(key = mode.name) {
+                        FilterChip(
+                            selected = filterMode == mode,
+                            onClick = { posViewModel.setFilterMode(mode) },
+                            label = { Text(label) },
+                            shape = RoundedCornerShape(50.dp)
+                        )
+                    }
                 }
             }
 
@@ -125,9 +163,10 @@ fun POSScreen(
             // Product grid
             if (filteredProducts.isEmpty()) {
                 EmptyStateView(
-                    "", "No products found",
-                    if (searchQuery.isNotBlank()) "No results for \"$searchQuery\""
-                    else "No products in this category."
+                    "",
+                    "Walang produkto dito",
+                    if (searchQuery.isNotBlank()) "Walang resulta para sa \"$searchQuery\". Subukan ibang salita."
+                    else "Walang produkto sa filter na ito. Subukan \"Lahat / All\" o magtanong sa Admin kung may idadagdag."
                 )
             } else {
                 LazyColumn(
@@ -139,6 +178,7 @@ fun POSScreen(
                         ProductListRow(
                             product = product,
                             qty = posViewModel.cartQtyFor(product.id),
+                            onRowTapAdd = { posViewModel.addToCart(product) },
                             onIncrease = { posViewModel.addToCart(product) },
                             onDecrease = { posViewModel.removeOneFromCart(product) }
                         )
@@ -173,6 +213,7 @@ fun POSScreen(
 private fun ProductListRow(
     product: Product,
     qty: Int,
+    onRowTapAdd: () -> Unit,
     onIncrease: () -> Unit,
     onDecrease: () -> Unit
 ) {
@@ -181,7 +222,14 @@ private fun ProductListRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Column(modifier = Modifier.weight(1f)) {
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .then(
+                    if (product.isAvailable) Modifier.clickable(onClick = onRowTapAdd) else Modifier
+                )
+                .padding(vertical = 8.dp)
+        ) {
             Text(
                 text = product.name,
                 style = MaterialTheme.typography.bodyLarge,
@@ -263,15 +311,32 @@ private fun CartSheetContent(
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
             shape = RoundedCornerShape(14.dp)
         ) {
-            Row(modifier = Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Column {
-                    Text("Total", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f))
-                    Text(formatPeso(total), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.onPrimaryContainer)
-                }
-                Button(onClick = onCheckout, shape = RoundedCornerShape(12.dp), modifier = Modifier.height(52.dp)) {
-                    Icon(Icons.Default.Check, null, modifier = Modifier.size(20.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text("Checkout", fontWeight = FontWeight.Bold)
+            BoxWithConstraints(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+                val compact = maxWidth < 340.dp
+                if (compact) {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Column {
+                            Text("Total", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f))
+                            Text(formatPeso(total), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                        }
+                        Button(onClick = onCheckout, shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth().height(52.dp)) {
+                            Icon(Icons.Default.Check, null, modifier = Modifier.size(20.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("Checkout", fontWeight = FontWeight.Bold)
+                        }
+                    }
+                } else {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Column {
+                            Text("Total", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f))
+                            Text(formatPeso(total), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                        }
+                        Button(onClick = onCheckout, shape = RoundedCornerShape(12.dp), modifier = Modifier.height(52.dp)) {
+                            Icon(Icons.Default.Check, null, modifier = Modifier.size(20.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("Checkout", fontWeight = FontWeight.Bold)
+                        }
+                    }
                 }
             }
         }
