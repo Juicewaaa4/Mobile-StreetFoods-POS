@@ -1,4 +1,4 @@
-# Zoey's Street Foods POS Application
+# Street Foods POS Application
 
 A simple mobile Point of Sale (POS) application for Zoey's Street Foods business using Kotlin with Jetpack Compose.
 
