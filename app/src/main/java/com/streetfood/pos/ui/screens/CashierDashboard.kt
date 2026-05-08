@@ -53,6 +53,7 @@ fun CashierDashboard(
     }
 
     var selectedTab by remember { mutableIntStateOf(0) }
+    var showLogoutConfirm by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -65,7 +66,7 @@ fun CashierDashboard(
                         leadingIcon = { Icon(Icons.Default.Person, contentDescription = null, modifier = Modifier.size(16.dp)) }
                     )
                     Spacer(Modifier.width(4.dp))
-                    IconButton(onClick = onLogout) {
+                    IconButton(onClick = { showLogoutConfirm = true }) {
                         Icon(Icons.Default.Logout, contentDescription = "Logout", tint = MaterialTheme.colorScheme.error)
                     }
                 },
@@ -81,8 +82,8 @@ fun CashierDashboard(
                     label = { Text("Home") }
                 )
                 NavigationBarItem(
-                    selected = selectedTab == 1,
-                    onClick = { selectedTab = 1; onNavigateToPOS() },
+                    selected = false,
+                    onClick = onNavigateToPOS,
                     icon = { Icon(Icons.Default.ShoppingCart, contentDescription = "POS") },
                     label = { Text("POS") }
                 )
@@ -101,7 +102,7 @@ fun CashierDashboard(
                 cashierName = cashierName,
                 todaySales = todaySales,
                 todayCount = todayCount,
-                onStartSelling = { selectedTab = 1; onNavigateToPOS() },
+                onStartSelling = onNavigateToPOS,
                 modifier = Modifier.padding(padding)
             )
             2 -> CashierMySalesTab(
@@ -110,6 +111,19 @@ fun CashierDashboard(
                 modifier = Modifier.padding(padding)
             )
         }
+    }
+
+    if (showLogoutConfirm) {
+        ConfirmDialog(
+            title = "Log Out?",
+            message = "You will return to the sign-in screen.",
+            confirmLabel = "Log Out",
+            onConfirm = {
+                showLogoutConfirm = false
+                onLogout()
+            },
+            onDismiss = { showLogoutConfirm = false }
+        )
     }
 }
 

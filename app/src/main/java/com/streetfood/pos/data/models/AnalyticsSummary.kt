@@ -3,7 +3,7 @@ package com.streetfood.pos.data.models
 /** Full analytics data for the selected date range. */
 data class AnalyticsSummary(
     val totalRevenue: Double = 0.0,
-    val totalCost: Double = 0.0,        // total puhunan spent
+    val totalCost: Double = 0.0,        // total capital cost
     val totalProfit: Double = 0.0,      // net kita
     val transactionCount: Int = 0,
     val avgTransactionValue: Double = 0.0,

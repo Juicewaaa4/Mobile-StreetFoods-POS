@@ -104,11 +104,11 @@ fun AnalyticsScreen(
                                     else
                                         MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.2f))
 
-                                    ProfitRow("Kita (Revenue)", formatPeso(data.totalRevenue), isPositive = true,
+                                    ProfitRow("Revenue", formatPeso(data.totalRevenue), isPositive = true,
                                         containerColor = if (data.totalProfit >= 0) MaterialTheme.colorScheme.onTertiaryContainer
                                         else MaterialTheme.colorScheme.onErrorContainer)
                                     if (data.totalCost > 0) {
-                                        ProfitRow("Puhunan (Cost)", "- ${formatPeso(data.totalCost)}", isPositive = false,
+                                        ProfitRow("Cost", "- ${formatPeso(data.totalCost)}", isPositive = false,
                                             containerColor = if (data.totalProfit >= 0) MaterialTheme.colorScheme.onTertiaryContainer
                                             else MaterialTheme.colorScheme.onErrorContainer)
                                         Divider(color = if (data.totalProfit >= 0)
@@ -121,7 +121,7 @@ fun AnalyticsScreen(
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
                                             Text(
-                                                "Net Kita (Profit)",
+                                                "Net Profit",
                                                 style = MaterialTheme.typography.titleMedium,
                                                 fontWeight = FontWeight.ExtraBold,
                                                 color = if (data.totalProfit >= 0) MaterialTheme.colorScheme.onTertiaryContainer
@@ -137,7 +137,7 @@ fun AnalyticsScreen(
                                         }
                                     } else {
                                         Text(
-                                            "💡 Lagyan ng puhunan ang mga produkto para makita ang net kita.",
+                                            "Add product costs to see net profit.",
                                             style = MaterialTheme.typography.bodySmall,
                                             color = if (data.totalProfit >= 0) MaterialTheme.colorScheme.onTertiaryContainer.copy(0.7f)
                                             else MaterialTheme.colorScheme.onErrorContainer.copy(0.7f)

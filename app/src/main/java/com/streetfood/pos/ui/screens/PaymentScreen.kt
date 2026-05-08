@@ -72,7 +72,7 @@ fun PaymentScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Bayad / Payment", fontWeight = FontWeight.Bold) },
+                title = { Text("Payment", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "Back") }
                 },
@@ -88,10 +88,10 @@ fun PaymentScreen(
                 verticalArrangement = Arrangement.Center,
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Text("Walang laman ang cart", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text("Your cart is empty", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(16.dp))
                 Button(onClick = onBack, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)) {
-                    Text("Bumalik sa POS")
+                    Text("Back to POS")
                 }
             }
         } else if (receiptData == null) {
@@ -158,7 +158,7 @@ fun PaymentScreen(
                                         Modifier.fillMaxWidth(),
                                         horizontalArrangement = Arrangement.SpaceBetween
                                     ) {
-                                        Text("Sukli / Change:", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
+                                        Text("Change:", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
                                         Text(formatPeso(change), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.primary)
                                     }
                                 } else {
@@ -167,7 +167,7 @@ fun PaymentScreen(
                                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                                     ) {
                                         Icon(Icons.Default.Warning, null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
-                                        Text("Kulang pa ng ${formatPeso(totalAmount - cashValue)}", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.SemiBold)
+                                        Text("Short by ${formatPeso(totalAmount - cashValue)}", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.SemiBold)
                                     }
                                 }
                             }
@@ -177,7 +177,7 @@ fun PaymentScreen(
 
                 // ── Quick Amount Buttons ──
                 item {
-                    Text("Mabilis na halaga", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("Quick amounts", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Spacer(Modifier.height(8.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         AssistChip(
@@ -223,7 +223,7 @@ fun PaymentScreen(
                         } else {
                             Icon(Icons.Default.CheckCircle, null, modifier = Modifier.size(22.dp))
                             Spacer(Modifier.width(8.dp))
-                            Text("I-complete ang Transaction", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                            Text("Complete Transaction", fontWeight = FontWeight.Bold, fontSize = 16.sp)
                         }
                     }
                     Spacer(Modifier.height(16.dp))
@@ -247,7 +247,7 @@ fun PaymentScreen(
                         modifier = Modifier.size(64.dp),
                         tint = MaterialTheme.colorScheme.primary
                     )
-                    Text("Tapos na!", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold)
+                    Text("Payment Complete", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold)
 
                     Column(
                         modifier = Modifier.fillMaxWidth(),
@@ -265,11 +265,11 @@ fun PaymentScreen(
                             Text(formatPeso(data.total), fontWeight = FontWeight.SemiBold)
                         }
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text("Bayad", fontWeight = FontWeight.SemiBold)
+                            Text("Cash", fontWeight = FontWeight.SemiBold)
                             Text(formatPeso(data.cash), fontWeight = FontWeight.SemiBold)
                         }
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text("Sukli", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                            Text("Change", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                             Text(formatPeso(data.change), fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.primary, fontSize = 18.sp)
                         }
                     }
@@ -282,7 +282,7 @@ fun PaymentScreen(
                         modifier = Modifier.fillMaxWidth().height(52.dp),
                         shape = RoundedCornerShape(12.dp)
                     ) {
-                        Text("Bagong Transaction", fontWeight = FontWeight.Bold)
+                        Text("New Transaction", fontWeight = FontWeight.Bold)
                     }
                 }
             }

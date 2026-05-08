@@ -41,7 +41,7 @@ fun LoginScreen(
     val focusManager = LocalFocusManager.current
 
     // Navigate once login succeeds
-    LaunchedEffect(isLoggedIn) {
+    LaunchedEffect(isLoggedIn, userRole) {
         if (isLoggedIn && userRole != null) {
             onLoginSuccess(userRole!!)
         }

@@ -43,9 +43,9 @@ fun POSScreen(
     val cartSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     val filterOptions = listOf(
-        ProductFilterMode.ALL to "Lahat / All",
+        ProductFilterMode.ALL to "All",
         ProductFilterMode.AVAILABLE to "Available",
-        ProductFilterMode.UNAVAILABLE to "Hindi available"
+        ProductFilterMode.UNAVAILABLE to "Unavailable"
     )
 
     Scaffold(
@@ -76,8 +76,8 @@ fun POSScreen(
                         }
                         Spacer(Modifier.width(8.dp))
                         Text(
-                            if (cart.isEmpty()) "Cart — walang laman (${formatPeso(0.0)})"
-                            else "Tingnan ang cart — ${formatPeso(total)}",
+                            if (cart.isEmpty()) "Cart - empty (${formatPeso(0.0)})"
+                            else "View cart - ${formatPeso(total)}",
                             fontWeight = FontWeight.Medium,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
@@ -89,7 +89,7 @@ fun POSScreen(
                         modifier = Modifier.weight(1f).height(52.dp),
                         shape = RoundedCornerShape(12.dp)
                     ) {
-                        Text("Mag-bayad / Pay", fontWeight = FontWeight.Bold)
+                        Text("Pay", fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -132,7 +132,7 @@ fun POSScreen(
                 value = searchQuery,
                 onValueChange = { posViewModel.setSearchQuery(it) },
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-                placeholder = { Text("Hanapin ang produkto / Search...") },
+                placeholder = { Text("Search products...") },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search") },
                 trailingIcon = {
                     if (searchQuery.isNotBlank()) IconButton(onClick = { posViewModel.setSearchQuery("") }) { Icon(Icons.Default.Clear, null) }
@@ -164,9 +164,9 @@ fun POSScreen(
             if (filteredProducts.isEmpty()) {
                 EmptyStateView(
                     "",
-                    "Walang produkto dito",
-                    if (searchQuery.isNotBlank()) "Walang resulta para sa \"$searchQuery\". Subukan ibang salita."
-                    else "Walang produkto sa filter na ito. Subukan \"Lahat / All\" o magtanong sa Admin kung may idadagdag."
+                    "No products here",
+                    if (searchQuery.isNotBlank()) "No results for \"$searchQuery\". Try another search."
+                    else "No products match this filter. Try \"All\" or ask an admin to add products."
                 )
             } else {
                 LazyColumn(

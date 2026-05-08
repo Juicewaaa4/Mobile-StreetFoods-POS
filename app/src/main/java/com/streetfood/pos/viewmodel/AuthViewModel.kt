@@ -84,16 +84,16 @@ class AuthViewModel : ViewModel() {
                 val msg = e.message ?: ""
                 _loginError.value = when {
                     "INVALID_LOGIN_CREDENTIALS" in msg || "wrong-password" in msg || "invalid-credential" in msg ->
-                        "Mali ang username o password. Subukan ulit."
+                        "Incorrect username or password. Please try again."
                     "user-not-found" in msg ->
-                        "Hindi mahanap ang account na ito."
+                        "This account could not be found."
                     "network" in msg.lowercase() || "timeout" in msg.lowercase() ->
-                        "Walang internet connection. I-check ang iyong WiFi o Data."
+                        "No internet connection. Check your Wi-Fi or mobile data."
                     "too-many-requests" in msg ->
-                        "Maraming beses na nagkamali. Subukan ulit mamaya."
+                        "Too many failed attempts. Please try again later."
                     "api_key" in msg.lowercase() || "blocked" in msg.lowercase() ->
-                        "API Key Error: Na-block o pinalitan mo ang API Key. Paki-download ang bagong google-services.json"
-                    else -> "Error: $msg" // Ipapakita ang totoong error sa screen
+                        "API key error: the API key was blocked or changed. Download the new google-services.json file."
+                    else -> "Error: $msg"
                 }
                 _isLoading.value = false
             }

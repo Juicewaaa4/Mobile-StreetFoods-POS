@@ -42,6 +42,7 @@ fun AdminDashboard(
     }
 
     val analyticsState by analyticsViewModel.analyticsData.collectAsStateWithLifecycle()
+    var showLogoutConfirm by remember { mutableStateOf(false) }
 
     // Today's summary pulled from analytics
     val todayRevenue = (analyticsState as? UiState.Success)?.data?.totalRevenue ?: 0.0
@@ -66,7 +67,7 @@ fun AdminDashboard(
                         colors = AssistChipDefaults.assistChipColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
                     )
                     Spacer(Modifier.width(4.dp))
-                    IconButton(onClick = onLogout) {
+                    IconButton(onClick = { showLogoutConfirm = true }) {
                         Icon(Icons.Default.Logout, contentDescription = "Logout", tint = MaterialTheme.colorScheme.error)
                     }
                 },
@@ -124,6 +125,19 @@ fun AdminDashboard(
 
             item { Spacer(Modifier.height(16.dp)) }
         }
+    }
+
+    if (showLogoutConfirm) {
+        ConfirmDialog(
+            title = "Log Out?",
+            message = "You will return to the sign-in screen.",
+            confirmLabel = "Log Out",
+            onConfirm = {
+                showLogoutConfirm = false
+                onLogout()
+            },
+            onDismiss = { showLogoutConfirm = false }
+        )
     }
 }
 

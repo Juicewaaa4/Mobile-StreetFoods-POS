@@ -46,7 +46,7 @@ class ProductViewModel(private val repo: ProductRepository) : ViewModel() {
         viewModelScope.launch {
             try {
                 repo.insertProduct(product)
-                _userMessages.emit("Na-save ang produkto.")
+                _userMessages.emit("Product saved.")
             } catch (e: Exception) {
                 _userMessages.emit(mapFirestoreOrNetworkError(e))
             }
@@ -57,7 +57,7 @@ class ProductViewModel(private val repo: ProductRepository) : ViewModel() {
         viewModelScope.launch {
             try {
                 repo.updateProduct(product)
-                if (notify) _userMessages.emit("Na-save ang pagbabago sa produkto.")
+                if (notify) _userMessages.emit("Product changes saved.")
             } catch (e: Exception) {
                 _userMessages.emit(mapFirestoreOrNetworkError(e))
             }
@@ -68,7 +68,7 @@ class ProductViewModel(private val repo: ProductRepository) : ViewModel() {
         viewModelScope.launch {
             try {
                 repo.deleteProduct(product)
-                _userMessages.emit("Natanggal ang produkto.")
+                _userMessages.emit("Product deleted.")
             } catch (e: Exception) {
                 _userMessages.emit(mapFirestoreOrNetworkError(e))
             }

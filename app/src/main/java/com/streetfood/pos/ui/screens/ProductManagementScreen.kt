@@ -62,8 +62,8 @@ fun ProductManagementScreen(
         when (val state = productsState) {
             is UiState.Loading -> LoadingIndicator()
             is UiState.Empty -> EmptyStateView(
-                "", "Walang Products",
-                "Pindutin ang + para magdagdag.",
+                "", "No Products",
+                "Tap + to add a product.",
                 modifier = Modifier.padding(padding)
             )
             is UiState.Success -> {
@@ -116,7 +116,7 @@ fun ProductManagementScreen(
                 }
             }
             is UiState.Error -> EmptyStateView(
-                "", "May error",
+                "", "Error",
                 state.message,
                 modifier = Modifier.padding(padding)
             )
@@ -127,8 +127,8 @@ fun ProductManagementScreen(
     deleteProduct?.let { product ->
         AlertDialog(
             onDismissRequest = { deleteProduct = null },
-            title = { Text("I-delete ang \"${product.name}\"?", fontWeight = FontWeight.Bold) },
-            text = { Text("Hindi na ito mababalik kapag natanggal na.") },
+            title = { Text("Delete \"${product.name}\"?", fontWeight = FontWeight.Bold) },
+            text = { Text("This cannot be undone.") },
             confirmButton = {
                 TextButton(
                     onClick = { productViewModel.deleteProduct(product); deleteProduct = null },
@@ -248,7 +248,7 @@ private fun ProductFormDialog(
         shape = RoundedCornerShape(16.dp),
         title = {
             Text(
-                if (existing == null) "Magdagdag ng Product" else "I-edit ang Product",
+                if (existing == null) "Add Product" else "Edit Product",
                 fontWeight = FontWeight.Bold
             )
         },
@@ -257,7 +257,7 @@ private fun ProductFormDialog(
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it.take(50); nameError = null },
-                    label = { Text("Pangalan ng Product") },
+                    label = { Text("Product Name") },
                     modifier = Modifier.fillMaxWidth(),
                     isError = nameError != null,
                     supportingText = nameError?.let { { Text(it, color = MaterialTheme.colorScheme.error) } },
@@ -268,7 +268,7 @@ private fun ProductFormDialog(
                 OutlinedTextField(
                     value = priceText,
                     onValueChange = { priceText = it; priceError = null },
-                    label = { Text("Presyo (₱)") },
+                    label = { Text("Price (₱)") },
                     modifier = Modifier.fillMaxWidth(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     isError = priceError != null,
@@ -281,7 +281,7 @@ private fun ProductFormDialog(
                 OutlinedTextField(
                     value = costText,
                     onValueChange = { costText = it },
-                    label = { Text("Puhunan / Cost (₱) — optional") },
+                    label = { Text("Cost (₱) - optional") },
                     modifier = Modifier.fillMaxWidth(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     shape = RoundedCornerShape(10.dp),
@@ -304,8 +304,8 @@ private fun ProductFormDialog(
                 onClick = {
                     val finalPrice = priceText.toDoubleOrNull()
                     when {
-                        name.isBlank() -> nameError = "Huwag iwanang blangko"
-                        finalPrice == null || finalPrice <= 0 -> priceError = "Ilagay ang tamang presyo"
+                        name.isBlank() -> nameError = "Product name is required"
+                        finalPrice == null || finalPrice <= 0 -> priceError = "Enter a valid price"
                         else -> onSave(
                             Product(
                                 id = existing?.id ?: "",
@@ -319,7 +319,7 @@ private fun ProductFormDialog(
                 },
                 shape = RoundedCornerShape(10.dp)
             ) {
-                Text("I-save", fontWeight = FontWeight.Bold)
+                Text("Save", fontWeight = FontWeight.Bold)
             }
         },
         dismissButton = {

@@ -4,7 +4,7 @@ data class Product(
     val id: String = "",
     val name: String = "",
     val price: Double = 0.0,       // selling price
-    val cost: Double = 0.0,        // puhunan / capital cost
+    val cost: Double = 0.0,        // capital cost
     val category: String = "Street Food",
     val isAvailable: Boolean = true
 ) {
