@@ -6,7 +6,9 @@ import com.streetfood.pos.data.models.Transaction
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
-import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 
 class TransactionRepository(private val db: FirebaseFirestore) {
 
@@ -16,15 +18,9 @@ class TransactionRepository(private val db: FirebaseFirestore) {
         val listener = transactionsCollection
             .orderBy("timestamp", Query.Direction.DESCENDING)
             .addSnapshotListener { snapshot, error ->
-                if (error != null) {
-                    close(error)
-                    return@addSnapshotListener
-                }
+                if (error != null) { close(error); return@addSnapshotListener }
                 if (snapshot != null) {
-                    val transactions = snapshot.documents.mapNotNull { doc ->
-                        doc.toObject(Transaction::class.java)?.copy(id = doc.id)
-                    }
-                    trySend(transactions)
+                    trySend(snapshot.documents.mapNotNull { it.toObject(Transaction::class.java)?.copy(id = it.id) })
                 }
             }
         awaitClose { listener.remove() }
@@ -36,15 +32,9 @@ class TransactionRepository(private val db: FirebaseFirestore) {
             .whereLessThanOrEqualTo("timestamp", end)
             .orderBy("timestamp", Query.Direction.DESCENDING)
             .addSnapshotListener { snapshot, error ->
-                if (error != null) {
-                    close(error)
-                    return@addSnapshotListener
-                }
+                if (error != null) { close(error); return@addSnapshotListener }
                 if (snapshot != null) {
-                    val transactions = snapshot.documents.mapNotNull { doc ->
-                        doc.toObject(Transaction::class.java)?.copy(id = doc.id)
-                    }
-                    trySend(transactions)
+                    trySend(snapshot.documents.mapNotNull { it.toObject(Transaction::class.java)?.copy(id = it.id) })
                 }
             }
         awaitClose { listener.remove() }
@@ -57,32 +47,27 @@ class TransactionRepository(private val db: FirebaseFirestore) {
             .whereLessThanOrEqualTo("timestamp", end)
             .orderBy("timestamp", Query.Direction.DESCENDING)
             .addSnapshotListener { snapshot, error ->
-                if (error != null) {
-                    close(error)
-                    return@addSnapshotListener
-                }
+                if (error != null) { close(error); return@addSnapshotListener }
                 if (snapshot != null) {
-                    val transactions = snapshot.documents.mapNotNull { doc ->
-                        doc.toObject(Transaction::class.java)?.copy(id = doc.id)
-                    }
-                    trySend(transactions)
+                    trySend(snapshot.documents.mapNotNull { it.toObject(Transaction::class.java)?.copy(id = it.id) })
                 }
             }
         awaitClose { listener.remove() }
     }
 
-    suspend fun insertTransaction(transaction: Transaction) {
-        val docRef = transactionsCollection.document()
-        // Keep document ID in Firestore doc id (not as a field) to avoid rules/merging issues.
-        docRef.set(
-            mapOf(
-                "timestamp" to transaction.timestamp,
-                "totalAmount" to transaction.totalAmount,
-                "cashReceived" to transaction.cashReceived,
-                "change" to transaction.change,
-                "cashierName" to transaction.cashierName,
-                "items" to transaction.items
+    suspend fun insertTransaction(transaction: Transaction) =
+        suspendCancellableCoroutine { cont ->
+            transactionsCollection.document().set(
+                mapOf(
+                    "timestamp"    to transaction.timestamp,
+                    "totalAmount"  to transaction.totalAmount,
+                    "cashReceived" to transaction.cashReceived,
+                    "change"       to transaction.change,
+                    "cashierName"  to transaction.cashierName,
+                    "items"        to transaction.items
+                )
             )
-        ).await()
-    }
+            .addOnSuccessListener { cont.resume(Unit) }
+            .addOnFailureListener { cont.resumeWithException(it) }
+        }
 }

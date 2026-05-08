@@ -6,7 +6,9 @@ import com.streetfood.pos.data.models.Product
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
-import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 
 class ProductRepository(private val db: FirebaseFirestore) {
 
@@ -16,15 +18,9 @@ class ProductRepository(private val db: FirebaseFirestore) {
         val listener = productsCollection
             .orderBy("name", Query.Direction.ASCENDING)
             .addSnapshotListener { snapshot, error ->
-                if (error != null) {
-                    close(error)
-                    return@addSnapshotListener
-                }
+                if (error != null) { close(error); return@addSnapshotListener }
                 if (snapshot != null) {
-                    val products = snapshot.documents.mapNotNull { doc ->
-                        doc.toObject(Product::class.java)?.copy(id = doc.id)
-                    }
-                    trySend(products)
+                    trySend(snapshot.documents.mapNotNull { it.toObject(Product::class.java)?.copy(id = it.id) })
                 }
             }
         awaitClose { listener.remove() }
@@ -35,51 +31,50 @@ class ProductRepository(private val db: FirebaseFirestore) {
             .whereEqualTo("isAvailable", true)
             .orderBy("name", Query.Direction.ASCENDING)
             .addSnapshotListener { snapshot, error ->
-                if (error != null) {
-                    close(error)
-                    return@addSnapshotListener
-                }
+                if (error != null) { close(error); return@addSnapshotListener }
                 if (snapshot != null) {
-                    val products = snapshot.documents.mapNotNull { doc ->
-                        doc.toObject(Product::class.java)?.copy(id = doc.id)
-                    }
-                    trySend(products)
+                    trySend(snapshot.documents.mapNotNull { it.toObject(Product::class.java)?.copy(id = it.id) })
                 }
             }
         awaitClose { listener.remove() }
     }
 
-    suspend fun insertProduct(product: Product) {
-        val docRef = productsCollection.document()
-        // Keep document ID in Firestore doc id (not as a field) to avoid rules/merging issues.
-        docRef.set(
-            mapOf(
-                "name" to product.name,
-                "price" to product.price,
-                "cost" to product.cost,
-                "category" to product.category,
-                "isAvailable" to product.isAvailable
-            )
-        ).await()
-    }
-
-    suspend fun updateProduct(product: Product) {
-        if (product.id.isNotEmpty()) {
-            productsCollection.document(product.id).set(
+    suspend fun insertProduct(product: Product) =
+        suspendCancellableCoroutine { cont ->
+            productsCollection.document().set(
                 mapOf(
-                    "name" to product.name,
-                    "price" to product.price,
-                    "cost" to product.cost,
-                    "category" to product.category,
+                    "name"        to product.name,
+                    "price"       to product.price,
+                    "cost"        to product.cost,
+                    "category"    to product.category,
                     "isAvailable" to product.isAvailable
                 )
-            ).await()
+            )
+            .addOnSuccessListener { cont.resume(Unit) }
+            .addOnFailureListener { cont.resumeWithException(it) }
         }
-    }
 
-    suspend fun deleteProduct(product: Product) {
-        if (product.id.isNotEmpty()) {
-            productsCollection.document(product.id).delete().await()
+    suspend fun updateProduct(product: Product) =
+        suspendCancellableCoroutine { cont ->
+            if (product.id.isEmpty()) { cont.resume(Unit); return@suspendCancellableCoroutine }
+            productsCollection.document(product.id).set(
+                mapOf(
+                    "name"        to product.name,
+                    "price"       to product.price,
+                    "cost"        to product.cost,
+                    "category"    to product.category,
+                    "isAvailable" to product.isAvailable
+                )
+            )
+            .addOnSuccessListener { cont.resume(Unit) }
+            .addOnFailureListener { cont.resumeWithException(it) }
         }
-    }
+
+    suspend fun deleteProduct(product: Product) =
+        suspendCancellableCoroutine { cont ->
+            if (product.id.isEmpty()) { cont.resume(Unit); return@suspendCancellableCoroutine }
+            productsCollection.document(product.id).delete()
+                .addOnSuccessListener { cont.resume(Unit) }
+                .addOnFailureListener { cont.resumeWithException(it) }
+        }
 }
