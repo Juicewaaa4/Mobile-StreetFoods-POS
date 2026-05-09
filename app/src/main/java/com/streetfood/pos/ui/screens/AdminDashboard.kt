@@ -1,27 +1,66 @@
 package com.streetfood.pos.ui.screens
 
-import androidx.compose.foundation.layout.*
+import android.app.Activity
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.AdminPanelSettings
+import androidx.compose.material.icons.filled.Assessment
+import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Inventory
+import androidx.compose.material.icons.filled.Logout
+import androidx.compose.material.icons.filled.ManageAccounts
+import androidx.compose.material.icons.filled.ShoppingCart
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AssistChipDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.streetfood.pos.data.models.UiState
 import com.streetfood.pos.data.repository.UserSessionRepository
-import com.streetfood.pos.ui.components.*
+import com.streetfood.pos.ui.components.ConfirmDialog
+import com.streetfood.pos.ui.components.StatCard
+import com.streetfood.pos.ui.components.formatPeso
 import com.streetfood.pos.viewmodel.AnalyticsViewModel
 import com.streetfood.pos.viewmodel.TransactionViewModel
 import java.text.SimpleDateFormat
-import java.util.*
-import androidx.activity.compose.BackHandler
-import androidx.compose.ui.platform.LocalContext
-import android.app.Activity
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -32,33 +71,34 @@ fun AdminDashboard(
     onNavigateToProducts: () -> Unit,
     onNavigateToAnalytics: () -> Unit,
     onNavigateToHistory: () -> Unit,
+    onNavigateToReports: () -> Unit,
+    onNavigateToUsers: () -> Unit,
     onLogout: () -> Unit
 ) {
     val adminName = UserSessionRepository.username
     val greeting = remember {
         when (Calendar.getInstance().get(Calendar.HOUR_OF_DAY)) {
-            in 5..11 -> "Good morning"; in 12..17 -> "Good afternoon"; else -> "Good evening"
+            in 5..11 -> "Good morning"
+            in 12..17 -> "Good afternoon"
+            else -> "Good evening"
         }
     }
 
     val analyticsState by analyticsViewModel.analyticsData.collectAsStateWithLifecycle()
     var showLogoutConfirm by remember { mutableStateOf(false) }
 
-    // Today's summary pulled from analytics
     val todayRevenue = (analyticsState as? UiState.Success)?.data?.totalRevenue ?: 0.0
     val todayCount = (analyticsState as? UiState.Success)?.data?.transactionCount ?: 0
     val bestSeller = (analyticsState as? UiState.Success)?.data?.bestSellerName ?: "N/A"
     val activeProducts = (analyticsState as? UiState.Success)?.data?.activeProductCount ?: 0
 
     val context = LocalContext.current
-    BackHandler {
-        (context as? Activity)?.finish()
-    }
+    BackHandler { (context as? Activity)?.finish() }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("🍢 Zoey's Street Foods", fontWeight = FontWeight.Bold) },
+                title = { Text("Zoey's Street Foods", fontWeight = FontWeight.Bold) },
                 actions = {
                     AssistChip(
                         onClick = {},
@@ -80,7 +120,6 @@ fun AdminDashboard(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             item {
-                // Admin greeting card
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
@@ -88,7 +127,7 @@ fun AdminDashboard(
                     elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                 ) {
                     Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text("$greeting, $adminName! 👋", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                        Text("$greeting, $adminName!", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
                         Text("Here's today's overview.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f))
                         Text(SimpleDateFormat("EEEE, MMMM d, yyyy", Locale.getDefault()).format(Date()), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f))
                     }
@@ -96,15 +135,14 @@ fun AdminDashboard(
             }
 
             item {
-                // 2×2 summary cards
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        StatCard("Today's Revenue", formatPeso(todayRevenue), "💰", modifier = Modifier.weight(1f), onClick = onNavigateToAnalytics)
-                        StatCard("Transactions Today", todayCount.toString(), "🧾", modifier = Modifier.weight(1f), onClick = onNavigateToHistory)
+                        StatCard("Today's Revenue", formatPeso(todayRevenue), "", modifier = Modifier.weight(1f), onClick = onNavigateToAnalytics)
+                        StatCard("Transactions Today", todayCount.toString(), "", modifier = Modifier.weight(1f), onClick = onNavigateToHistory)
                     }
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        StatCard("Best Seller", bestSeller, "⭐", modifier = Modifier.weight(1f), onClick = onNavigateToAnalytics)
-                        StatCard("Active Products", activeProducts.toString(), "🍢", modifier = Modifier.weight(1f), onClick = onNavigateToProducts)
+                        StatCard("Best Seller", bestSeller, "", modifier = Modifier.weight(1f), onClick = onNavigateToAnalytics)
+                        StatCard("Active Products", activeProducts.toString(), "", modifier = Modifier.weight(1f), onClick = onNavigateToProducts)
                     }
                 }
             }
@@ -114,12 +152,13 @@ fun AdminDashboard(
             }
 
             item {
-                // Navigation action cards
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    AdminNavCard("POS — Start Selling", "Process orders and complete transactions", Icons.Default.ShoppingCart, onNavigateToPOS)
+                    AdminNavCard("POS - Start Selling", "Process orders and complete transactions", Icons.Default.ShoppingCart, onNavigateToPOS)
                     AdminNavCard("Product Management", "Add, edit, or toggle product availability", Icons.Default.Inventory, onNavigateToProducts)
-                    AdminNavCard("Analytics", "View sales reports and trends", Icons.Default.BarChart, onNavigateToAnalytics)
+                    AdminNavCard("Analytics", "View sales charts and trends", Icons.Default.BarChart, onNavigateToAnalytics)
                     AdminNavCard("Transaction History", "Browse all past transactions", Icons.Default.History, onNavigateToHistory)
+                    AdminNavCard("Sales Report", "Generate and download date-based sales reports", Icons.Default.Assessment, onNavigateToReports)
+                    AdminNavCard("User Management", "Create, edit, and delete staff accounts", Icons.Default.ManageAccounts, onNavigateToUsers)
                 }
             }
 
@@ -132,10 +171,8 @@ fun AdminDashboard(
             title = "Log Out?",
             message = "You will return to the sign-in screen.",
             confirmLabel = "Log Out",
-            onConfirm = {
-                showLogoutConfirm = false
-                onLogout()
-            },
+            isDestructive = false,
+            onConfirm = { showLogoutConfirm = false; onLogout() },
             onDismiss = { showLogoutConfirm = false }
         )
     }
@@ -143,7 +180,12 @@ fun AdminDashboard(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun AdminNavCard(title: String, subtitle: String, icon: androidx.compose.ui.graphics.vector.ImageVector, onClick: () -> Unit) {
+private fun AdminNavCard(
+    title: String,
+    subtitle: String,
+    icon: ImageVector,
+    onClick: () -> Unit
+) {
     Card(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),

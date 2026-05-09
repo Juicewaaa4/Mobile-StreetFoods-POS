@@ -32,6 +32,8 @@ fun CashierDashboard(
     onLogout: () -> Unit
 ) {
     val cashierName = UserSessionRepository.username
+    val snackbarHostState = remember { SnackbarHostState() }
+    val dashboardError by transactionViewModel.cashierDashboardError.collectAsStateWithLifecycle()
     val todayTransactions by transactionViewModel.getCashierTodayTransactions(cashierName)
         .collectAsStateWithLifecycle(initialValue = emptyList())
 
@@ -41,6 +43,12 @@ fun CashierDashboard(
     val context = LocalContext.current
     BackHandler {
         (context as? Activity)?.finish()
+    }
+
+    LaunchedEffect(dashboardError) {
+        val msg = dashboardError ?: return@LaunchedEffect
+        snackbarHostState.showSnackbar(message = msg, withDismissAction = true)
+        transactionViewModel.consumeCashierDashboardError()
     }
 
     // Greeting based on time of day
@@ -56,6 +64,7 @@ fun CashierDashboard(
     var showLogoutConfirm by remember { mutableStateOf(false) }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text("🍢 Zoey's Street Foods", fontWeight = FontWeight.Bold) },
@@ -118,6 +127,7 @@ fun CashierDashboard(
             title = "Log Out?",
             message = "You will return to the sign-in screen.",
             confirmLabel = "Log Out",
+            isDestructive = false,
             onConfirm = {
                 showLogoutConfirm = false
                 onLogout()

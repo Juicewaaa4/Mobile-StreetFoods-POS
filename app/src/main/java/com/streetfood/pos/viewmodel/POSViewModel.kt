@@ -164,9 +164,9 @@ class POSViewModel(
         _totalAmount.value = _cart.value.sumOf { it.totalPrice }
     }
 
-    fun processTransaction(cashDigits: String): Boolean {
+    fun processTransaction(cashInput: String): Boolean {
         if (_isProcessingPayment.value) return false
-        val cash = cashDigits.toDoubleOrNull()?.div(100.0) ?: 0.0
+        val cash = cashInput.toDoubleOrNull() ?: 0.0
         if (_cart.value.isEmpty() || cash < _totalAmount.value) return false
 
         viewModelScope.launch {

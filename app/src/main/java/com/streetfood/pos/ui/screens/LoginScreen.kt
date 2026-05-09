@@ -1,8 +1,11 @@
 package com.streetfood.pos.ui.screens
 
+import android.content.Context
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -30,9 +33,12 @@ fun LoginScreen(
     authViewModel: AuthViewModel = viewModel(),
     onLoginSuccess: (role: String) -> Unit
 ) {
-    var username by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
+    val context = LocalContext.current
+    val sharedPref = remember { context.getSharedPreferences("login_prefs", Context.MODE_PRIVATE) }
+    var username by remember { mutableStateOf(sharedPref.getString("username", "") ?: "") }
+    var password by remember { mutableStateOf(sharedPref.getString("password", "") ?: "") }
     var passwordVisible by remember { mutableStateOf(false) }
+    var rememberMe by remember { mutableStateOf(sharedPref.getBoolean("rememberMe", false)) }
 
     val isLoading by authViewModel.isLoading.collectAsStateWithLifecycle()
     val loginError by authViewModel.loginError.collectAsStateWithLifecycle()
@@ -43,6 +49,15 @@ fun LoginScreen(
     // Navigate once login succeeds
     LaunchedEffect(isLoggedIn, userRole) {
         if (isLoggedIn && userRole != null) {
+            if (rememberMe) {
+                sharedPref.edit()
+                    .putString("username", username)
+                    .putString("password", password)
+                    .putBoolean("rememberMe", true)
+                    .apply()
+            } else {
+                sharedPref.edit().clear().apply()
+            }
             onLoginSuccess(userRole!!)
         }
     }
@@ -56,6 +71,7 @@ fun LoginScreen(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
                 .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(0.dp)
@@ -150,6 +166,24 @@ fun LoginScreen(
                             focusedBorderColor = MaterialTheme.colorScheme.primary
                         )
                     )
+
+                    // Remember Me Checkbox
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Checkbox(
+                            checked = rememberMe,
+                            onCheckedChange = { rememberMe = it },
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        Text(
+                            text = "Remember Me",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
 
                     // Error message
                     AnimatedVisibility(visible = loginError != null) {

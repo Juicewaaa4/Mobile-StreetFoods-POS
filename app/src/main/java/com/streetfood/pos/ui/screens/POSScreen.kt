@@ -18,8 +18,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.flow.map
 import com.streetfood.pos.data.models.CartItem
 import com.streetfood.pos.data.models.Product
+import com.streetfood.pos.ui.components.ConfirmDialog
 import com.streetfood.pos.ui.components.EmptyStateView
 import com.streetfood.pos.ui.components.formatPeso
 import com.streetfood.pos.viewmodel.POSViewModel
@@ -40,6 +42,9 @@ fun POSScreen(
     val productsLoadError by posViewModel.productsLoadError.collectAsStateWithLifecycle()
 
     var showCartSheet by remember { mutableStateOf(false) }
+    var showExitConfirm by remember { mutableStateOf(false) }
+    var showProceedConfirm by remember { mutableStateOf(false) }
+    var pendingRemoveItem by remember { mutableStateOf<CartItem?>(null) }
     val cartSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     val filterOptions = listOf(
@@ -53,7 +58,9 @@ fun POSScreen(
             TopAppBar(
                 title = { Text("Point of Sale", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "Back") }
+                    IconButton(onClick = { if (cart.isNotEmpty()) showExitConfirm = true else onBack() }) {
+                        Icon(Icons.Default.ArrowBack, "Back")
+                    }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
             )
@@ -84,7 +91,7 @@ fun POSScreen(
                         )
                     }
                     Button(
-                        onClick = onProceedToPayment,
+                        onClick = { showProceedConfirm = true },
                         enabled = cart.isNotEmpty(),
                         modifier = Modifier.weight(1f).height(52.dp),
                         shape = RoundedCornerShape(12.dp)
@@ -175,9 +182,14 @@ fun POSScreen(
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     items(filteredProducts, key = { it.id }) { product ->
+                        val qty by remember(product.id) {
+                            posViewModel.cart.map { cartList ->
+                                cartList.find { it.product.id == product.id }?.quantity ?: 0
+                            }
+                        }.collectAsStateWithLifecycle(initialValue = posViewModel.cartQtyFor(product.id))
                         ProductListRow(
                             product = product,
-                            qty = posViewModel.cartQtyFor(product.id),
+                            qty = qty,
                             onRowTapAdd = { posViewModel.addToCart(product) },
                             onIncrease = { posViewModel.addToCart(product) },
                             onDecrease = { posViewModel.removeOneFromCart(product) }
@@ -200,11 +212,52 @@ fun POSScreen(
                 cart = cart,
                 total = total,
                 onUpdateQty = { item, qty -> posViewModel.updateQuantity(item, qty) },
-                onRemove = { posViewModel.removeFromCart(it) },
+                onRequestRemove = { pendingRemoveItem = it },
                 onClearCart = { posViewModel.clearCart(); showCartSheet = false },
-                onCheckout = { showCartSheet = false; onProceedToPayment() }
+                onCheckout = { showProceedConfirm = true }
             )
         }
+    }
+
+    if (showExitConfirm) {
+        ConfirmDialog(
+            title = "Leave POS?",
+            message = "You have items in your cart. Going back will keep your cart.",
+            confirmLabel = "Leave",
+            onConfirm = {
+                showExitConfirm = false
+                onBack()
+            },
+            onDismiss = { showExitConfirm = false }
+        )
+    }
+
+    if (showProceedConfirm) {
+        ConfirmDialog(
+            title = "Proceed to Payment?",
+            message = "Items: ${cart.size}\nTotal: ${formatPeso(total)}",
+            confirmLabel = "Proceed",
+            isDestructive = false,
+            onConfirm = {
+                showProceedConfirm = false
+                showCartSheet = false
+                onProceedToPayment()
+            },
+            onDismiss = { showProceedConfirm = false }
+        )
+    }
+
+    pendingRemoveItem?.let { item ->
+        ConfirmDialog(
+            title = "Remove item?",
+            message = "\"${item.product.name}\" will be removed from cart.",
+            confirmLabel = "Remove",
+            onConfirm = {
+                posViewModel.removeFromCart(item)
+                pendingRemoveItem = null
+            },
+            onDismiss = { pendingRemoveItem = null }
+        )
     }
 }
 
@@ -272,7 +325,7 @@ private fun CartSheetContent(
     cart: List<CartItem>,
     total: Double,
     onUpdateQty: (CartItem, Int) -> Unit,
-    onRemove: (CartItem) -> Unit,
+    onRequestRemove: (CartItem) -> Unit,
     onClearCart: () -> Unit,
     onCheckout: () -> Unit
 ) {
@@ -299,7 +352,7 @@ private fun CartSheetContent(
                     item = item,
                     onIncrease = { onUpdateQty(item, item.quantity + 1) },
                     onDecrease = { onUpdateQty(item, item.quantity - 1) },
-                    onRemove = { onRemove(item) }
+                    onRemove = { onRequestRemove(item) }
                 )
                 Divider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant)
             }

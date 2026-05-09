@@ -19,7 +19,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.streetfood.pos.data.models.CartItem
 import com.streetfood.pos.ui.components.*
 import com.streetfood.pos.viewmodel.POSViewModel
-import kotlin.math.roundToLong
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -35,8 +34,8 @@ fun PaymentScreen(
     val paymentError by posViewModel.paymentError.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
 
-    var cashDigits by remember { mutableStateOf("") }
-    val cashValue by remember { derivedStateOf { digitsToPeso(cashDigits) } }
+    var cashInput by remember { mutableStateOf("") }
+    val cashValue by remember { derivedStateOf { digitsToPeso(cashInput) } }
     val change by remember { derivedStateOf { (cashValue - totalAmount).coerceAtLeast(0.0) } }
     val isSufficient by remember { derivedStateOf { cashValue >= totalAmount } }
 
@@ -66,7 +65,7 @@ fun PaymentScreen(
         pendingTotal = totalAmount
         pendingCash = cashValue
         pendingChange = change
-        posViewModel.processTransaction(cashDigits)
+        posViewModel.processTransaction(cashInput)
     }
 
     Scaffold(
@@ -135,7 +134,7 @@ fun PaymentScreen(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp),
                         colors = CardDefaults.cardColors(
-                            containerColor = if (isSufficient && cashDigits.isNotEmpty())
+                            containerColor = if (isSufficient && cashInput.isNotEmpty())
                                 MaterialTheme.colorScheme.primaryContainer
                             else
                                 MaterialTheme.colorScheme.surfaceVariant
@@ -147,11 +146,12 @@ fun PaymentScreen(
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Text(
-                                text = if (cashDigits.isEmpty()) "₱0.00" else formatDigitsAsPeso(cashDigits),
-                                style = MaterialTheme.typography.displaySmall,
-                                fontWeight = FontWeight.ExtraBold
+                                text = if (cashInput.isEmpty()) "Enter cash amount" else formatDigitsAsPeso(cashInput),
+                                style = if (cashInput.isEmpty()) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.displaySmall,
+                                fontWeight = FontWeight.ExtraBold,
+                                textAlign = TextAlign.Center
                             )
-                            if (cashDigits.isNotEmpty()) {
+                            if (cashInput.isNotEmpty()) {
                                 Spacer(Modifier.height(8.dp))
                                 if (isSufficient) {
                                     Row(
@@ -181,14 +181,14 @@ fun PaymentScreen(
                     Spacer(Modifier.height(8.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         AssistChip(
-                            onClick = { cashDigits = pesosToCashDigits(totalAmount) },
+                            onClick = { cashInput = pesoInputText(totalAmount) },
                             label = { Text("Exact") },
                             leadingIcon = { Icon(Icons.Default.Check, null, Modifier.size(16.dp)) }
                         )
                         listOf(20.0, 50.0, 100.0, 500.0).forEach { add ->
                             AssistChip(
                                 onClick = {
-                                    cashDigits = pesosToCashDigits((cashValue + add).coerceAtMost(999_999.99))
+                                    cashInput = pesoInputText((cashValue + add).coerceAtMost(999_999.99))
                                 },
                                 label = { Text("+${add.toInt()}") }
                             )
@@ -196,17 +196,30 @@ fun PaymentScreen(
                     }
                 }
 
-                // ── Numpad ──
+                // ── Cash Input Field ──
                 item {
-                    NumericKeypad(
-                        onKeyPress = { key ->
-                            when (key) {
-                                "⌫" -> if (cashDigits.isNotEmpty()) cashDigits = cashDigits.dropLast(1)
-                                "00" -> if (cashDigits.isNotEmpty() && cashDigits.length + 2 <= 8) cashDigits += "00"
-                                else -> if (cashDigits.length < 8) cashDigits += key
+                    OutlinedTextField(
+                        value = cashInput,
+                        onValueChange = { newValue ->
+                            if (newValue.isEmpty() || newValue.matches(Regex("^\\d*\\.?\\d{0,2}$"))) {
+                                cashInput = newValue
                             }
                         },
-                        modifier = Modifier.fillMaxWidth()
+                        label = { Text("Amount Received") },
+                        modifier = Modifier.fillMaxWidth(),
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                            keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
+                        ),
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                }
+                        modifier = Modifier.fillMaxWidth(),
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                            keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
+                        ),
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp)
                     )
                 }
 
@@ -290,9 +303,20 @@ fun PaymentScreen(
     }
 }
 
-private fun pesosToCashDigits(pesos: Double): String {
-    val cents = (pesos * 100.0).roundToLong().coerceIn(0L, 99_999_999L)
-    return cents.toString()
+private fun pesoInputText(pesos: Double): String = "%.2f".format(pesos)
+
+private fun updateCashInput(current: String, key: String): String = when (key) {
+    "⌫" -> current.dropLast(1)
+    "." -> if (current.contains(".")) current else if (current.isBlank()) "0." else "$current."
+    else -> {
+        val candidate = if (current == "0") key else current + key
+        val decimalPlaces = if (candidate.contains(".")) candidate.substringAfter(".").length else 0
+        when {
+            candidate.length > 9 -> current
+            candidate.contains(".") && decimalPlaces > 2 -> current
+            else -> candidate
+        }
+    }
 }
 
 data class ReceiptData(val items: List<CartItem>, val total: Double, val cash: Double, val change: Double)
