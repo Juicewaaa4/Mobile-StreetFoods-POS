@@ -76,9 +76,9 @@ class POSViewModel(
                 productRepo.getAllProducts().collect { products ->
                     _productsLoadError.value = null
                     _allProducts.value = products
-                    if (products.isEmpty() && !isSeedingDefaultProducts) {
-                        initializeDefaultProducts()
-                    }
+                    // if (products.isEmpty() && !isSeedingDefaultProducts) {
+                    //     initializeDefaultProducts()
+                    // }
                 }
             } catch (e: Exception) {
                 _productsLoadError.value = mapFirestoreOrNetworkError(e)

@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -97,7 +98,7 @@ fun ConfirmDialog(
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         androidx.compose.material3.Icon(
-                            if (isDestructive) Icons.Default.Warning else androidx.compose.material.icons.Icons.Default.Info,
+                            if (isDestructive) Icons.Default.Warning else Icons.Default.Info,
                             contentDescription = null,
                             tint = if (isDestructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(24.dp)

@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.weight
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -26,6 +25,7 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -102,7 +102,7 @@ fun RevenueBarChart(data: List<Pair<String, Double>>, modifier: Modifier = Modif
                             left + width / 2,
                             (top - 6.dp.toPx()).coerceAtLeast(12.dp.toPx()),
                             android.graphics.Paint().apply {
-                                color = androidx.compose.ui.graphics.toArgb(onSurface)
+                                color = onSurface.toArgb()
                                 textAlign = android.graphics.Paint.Align.CENTER
                                 textSize = 11.sp.toPx()
                                 isFakeBoldText = true

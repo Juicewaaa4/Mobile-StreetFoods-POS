@@ -3,6 +3,7 @@ package com.streetfood.pos.ui.screens
 import android.content.Context
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -14,9 +15,11 @@ import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.*
@@ -77,16 +80,11 @@ fun LoginScreen(
             verticalArrangement = Arrangement.spacedBy(0.dp)
         ) {
             // Logo section
-            Card(
-                modifier = Modifier.size(100.dp),
-                shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
-                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-            ) {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("🍢", fontSize = 52.sp)
-                }
-            }
+            Image(
+                painter = painterResource(id = com.streetfood.pos.R.drawable.app_logo),
+                contentDescription = "App Logo",
+                modifier = Modifier.size(120.dp)
+            )
 
             Spacer(Modifier.height(20.dp))
 
@@ -222,7 +220,12 @@ fun LoginScreen(
 
             Spacer(Modifier.height(24.dp))
 
-
+            Text(
+                text = "Developed by: Lloyd Joshua De Lara",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                textAlign = TextAlign.Center
+            )
         }
     }
 }

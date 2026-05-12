@@ -211,15 +211,6 @@ fun PaymentScreen(
                             keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
                         ),
                         singleLine = true,
-                        shape = RoundedCornerShape(12.dp)
-                    )
-                }
-                        modifier = Modifier.fillMaxWidth(),
-                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
-                            keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
-                        ),
-                        singleLine = true,
-                        shape = RoundedCornerShape(12.dp)
                     )
                 }
 
