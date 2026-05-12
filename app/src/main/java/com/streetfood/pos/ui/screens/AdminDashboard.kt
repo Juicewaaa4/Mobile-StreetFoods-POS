@@ -93,7 +93,23 @@ fun AdminDashboard(
     val activeProducts = (analyticsState as? UiState.Success)?.data?.activeProductCount ?: 0
 
     val context = LocalContext.current
-    BackHandler { (context as? Activity)?.finish() }
+    var showExitDialog by remember { mutableStateOf(false) }
+
+    BackHandler { showExitDialog = true }
+
+    if (showExitDialog) {
+        AlertDialog(
+            onDismissRequest = { showExitDialog = false },
+            title = { Text("Exit App") },
+            text = { Text("Are you sure you want to exit the application?") },
+            confirmButton = {
+                TextButton(onClick = { (context as? Activity)?.finish() }) { Text("Yes") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showExitDialog = false }) { Text("No") }
+            }
+        )
+    }
 
     Scaffold(
         topBar = {
