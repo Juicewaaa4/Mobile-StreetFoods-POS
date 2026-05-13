@@ -1,5 +1,6 @@
 package com.streetfood.pos.ui.screens
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -47,6 +48,15 @@ fun POSScreen(
     var pendingRemoveItem by remember { mutableStateOf<CartItem?>(null) }
     val cartSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
+    // Intercept system back button / swipe-back gesture
+    BackHandler {
+        if (showCartSheet) {
+            showCartSheet = false
+        } else {
+            showExitConfirm = true
+        }
+    }
+
     val filterOptions = listOf(
         ProductFilterMode.ALL to "All",
         ProductFilterMode.AVAILABLE to "Available",
@@ -58,7 +68,7 @@ fun POSScreen(
             TopAppBar(
                 title = { Text("Point of Sale", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
-                    IconButton(onClick = { if (cart.isNotEmpty()) showExitConfirm = true else onBack() }) {
+                    IconButton(onClick = { showExitConfirm = true }) {
                         Icon(Icons.Default.ArrowBack, "Back")
                     }
                 },
@@ -222,7 +232,10 @@ fun POSScreen(
     if (showExitConfirm) {
         ConfirmDialog(
             title = "Leave POS?",
-            message = "You have items in your cart. Going back will keep your cart.",
+            message = if (cart.isNotEmpty())
+                "You have ${cart.size} item(s) in your cart (${formatPeso(total)}). \nYour cart will be kept."
+            else
+                "Are you sure you want to leave the POS?",
             confirmLabel = "Leave",
             onConfirm = {
                 showExitConfirm = false

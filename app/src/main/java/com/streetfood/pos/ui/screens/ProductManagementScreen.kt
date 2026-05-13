@@ -111,7 +111,10 @@ fun ProductManagementScreen(
                             onDelete = { deleteProduct = product },
                             onToggle = { productViewModel.toggleAvailability(product) }
                         )
-                        Divider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant)
+                        Divider(
+                            thickness = 0.5.dp,
+                            color = MaterialTheme.colorScheme.outlineVariant
+                        )
                     }
                 }
             }
@@ -155,6 +158,8 @@ fun ProductManagementScreen(
     }
 }
 
+// ─── Product Row ─────────────────────────────────────────────────────────────
+
 @Composable
 private fun ProductRow(
     product: Product,
@@ -162,13 +167,19 @@ private fun ProductRow(
     onDelete: () -> Unit,
     onToggle: () -> Unit
 ) {
+    // When isEditMode = true, the Avail switch becomes interactive.
+    // Tapping Edit once enables edit mode (switch can be toggled).
+    // Tapping the checkmark (Edit button again) opens the full edit dialog
+    // and exits edit mode.
+    var isEditMode by remember { mutableStateOf(false) }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Name + price label
+        // Name + cost
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 product.name,
@@ -197,27 +208,52 @@ private fun ProductRow(
             modifier = Modifier.width(70.dp)
         )
 
-        // Available switch
+        // Avail switch — disabled until Edit is tapped
         Switch(
             checked = product.isAvailable,
-            onCheckedChange = { onToggle() },
+            onCheckedChange = {
+                if (isEditMode) {
+                    onToggle()
+                    isEditMode = false
+                }
+            },
+            enabled = isEditMode,
             modifier = Modifier
                 .width(46.dp)
                 .padding(end = 4.dp),
             colors = SwitchDefaults.colors(
                 checkedThumbColor = Color.White,
-                checkedTrackColor = MaterialTheme.colorScheme.primary
+                checkedTrackColor = MaterialTheme.colorScheme.primary,
+                // Dimmed appearance when not in edit mode
+                disabledCheckedThumbColor = Color.White,
+                disabledCheckedTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.45f),
+                disabledUncheckedThumbColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                disabledUncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant
             )
         )
 
-        // Edit button
-        IconButton(onClick = onEdit, modifier = Modifier.size(40.dp)) {
+        // Edit / Confirm icon
+        // First tap  → enters edit mode (switch becomes interactive)
+        // Second tap → exits edit mode and opens full-edit dialog
+        IconButton(
+            onClick = {
+                if (isEditMode) {
+                    isEditMode = false
+                    onEdit()
+                } else {
+                    isEditMode = true
+                }
+            },
+            modifier = Modifier.size(40.dp)
+        ) {
             Icon(
-                Icons.Default.Edit, "Edit",
-                tint = MaterialTheme.colorScheme.primary,
+                imageVector = if (isEditMode) Icons.Default.Check else Icons.Default.Edit,
+                contentDescription = if (isEditMode) "Confirm" else "Edit",
+                tint = if (isEditMode) Color(0xFF2E7D32) else MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(20.dp)
             )
         }
+
         // Delete button
         IconButton(onClick = onDelete, modifier = Modifier.size(40.dp)) {
             Icon(
@@ -229,6 +265,8 @@ private fun ProductRow(
     }
 }
 
+// ─── Add / Edit Dialog ───────────────────────────────────────────────────────
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ProductFormDialog(
@@ -237,8 +275,20 @@ private fun ProductFormDialog(
     onSave: (Product) -> Unit
 ) {
     var name by remember { mutableStateOf(existing?.name ?: "") }
-    var priceText by remember { mutableStateOf(existing?.price?.let { if (it == 0.0) "" else it.toBigDecimal().stripTrailingZeros().toPlainString() } ?: "") }
-    var costText by remember { mutableStateOf(existing?.cost?.let { if (it == 0.0) "" else it.toBigDecimal().stripTrailingZeros().toPlainString() } ?: "") }
+    var priceText by remember {
+        mutableStateOf(
+            existing?.price?.let {
+                if (it == 0.0) "" else it.toBigDecimal().stripTrailingZeros().toPlainString()
+            } ?: ""
+        )
+    }
+    var costText by remember {
+        mutableStateOf(
+            existing?.cost?.let {
+                if (it == 0.0) "" else it.toBigDecimal().stripTrailingZeros().toPlainString()
+            } ?: ""
+        )
+    }
     var isAvailable by remember { mutableStateOf(existing?.isAvailable ?: true) }
     var nameError by remember { mutableStateOf<String?>(null) }
     var priceError by remember { mutableStateOf<String?>(null) }
@@ -254,6 +304,8 @@ private fun ProductFormDialog(
         },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+
+                // Product Name
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it.take(50); nameError = null },
@@ -265,6 +317,7 @@ private fun ProductFormDialog(
                     singleLine = true
                 )
 
+                // Price
                 OutlinedTextField(
                     value = priceText,
                     onValueChange = { priceText = it; priceError = null },
@@ -278,6 +331,7 @@ private fun ProductFormDialog(
                     leadingIcon = { Text("₱", color = MaterialTheme.colorScheme.primary) }
                 )
 
+                // Cost
                 OutlinedTextField(
                     value = costText,
                     onValueChange = { costText = it },
@@ -289,6 +343,49 @@ private fun ProductFormDialog(
                     leadingIcon = { Text("₱", color = MaterialTheme.colorScheme.onSurfaceVariant) }
                 )
 
+                // ── Auto-computed profit preview ──────────────────────────
+                val price = priceText.toDoubleOrNull()
+                val cost  = costText.toDoubleOrNull()
+                if (price != null && price > 0) {
+                    val profit = if (cost != null) price - cost else null
+                    val profitColor = when {
+                        profit == null   -> MaterialTheme.colorScheme.onSurfaceVariant
+                        profit > 0       -> Color(0xFF2E7D32)
+                        else             -> MaterialTheme.colorScheme.error
+                    }
+                    val cardBg = when {
+                        profit == null   -> MaterialTheme.colorScheme.surfaceVariant
+                        profit > 0       -> Color(0xFFE8F5E9)
+                        else             -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.35f)
+                    }
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = cardBg),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                "Profit per item",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = if (profit != null) formatPeso(profit) else "Enter cost to compute",
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.Bold,
+                                color = profitColor
+                            )
+                        }
+                    }
+                }
+                // ─────────────────────────────────────────────────────────
+
+                // Available toggle
                 Row(
                     Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -304,7 +401,7 @@ private fun ProductFormDialog(
                 onClick = {
                     val finalPrice = priceText.toDoubleOrNull()
                     when {
-                        name.isBlank() -> nameError = "Product name is required"
+                        name.isBlank()                     -> nameError = "Product name is required"
                         finalPrice == null || finalPrice <= 0 -> priceError = "Enter a valid price"
                         else -> onSave(
                             Product(
