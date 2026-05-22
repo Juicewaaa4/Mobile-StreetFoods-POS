@@ -72,4 +72,8 @@ class TransactionViewModel(
     fun consumeCashierDashboardError() {
         _cashierDashboardError.value = null
     }
+
+    fun purgeOldData(timestamp: Long, onComplete: (Boolean) -> Unit) {
+        repo.deleteOlderThan(timestamp, onComplete)
+    }
 }

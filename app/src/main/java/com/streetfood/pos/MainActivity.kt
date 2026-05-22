@@ -20,12 +20,6 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        
-        val sharedPref = getSharedPreferences("login_prefs", android.content.Context.MODE_PRIVATE)
-        val rememberMe = sharedPref.getBoolean("rememberMe", false)
-        if (!rememberMe) {
-            com.google.firebase.auth.FirebaseAuth.getInstance().signOut()
-        }
 
         enableEdgeToEdge()
         NetworkMonitor.initialize(this)

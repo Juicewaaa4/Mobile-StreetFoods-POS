@@ -115,6 +115,7 @@ fun AppNavigation(
             AdminDashboard(
                 transactionViewModel  = transactionViewModel,
                 analyticsViewModel    = analyticsViewModel,
+                activityLogViewModel  = activityLogViewModel,
                 onNavigateToPOS       = { navController.navigate(Screen.POS.route) },
                 onNavigateToProducts  = { navController.navigate(Screen.Products.route) },
                 onNavigateToAnalytics = { navController.navigate(Screen.Analytics.route) },

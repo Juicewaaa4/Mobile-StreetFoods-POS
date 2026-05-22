@@ -24,6 +24,8 @@ import com.streetfood.pos.viewmodel.ActivityLogViewModel
 import java.text.SimpleDateFormat
 import java.util.*
 
+import com.streetfood.pos.data.models.DateFilter
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ActivityLogScreen(
@@ -31,6 +33,9 @@ fun ActivityLogScreen(
     onBack: () -> Unit
 ) {
     val state by viewModel.logsState.collectAsStateWithLifecycle()
+    val dateFilter by viewModel.dateFilter.collectAsStateWithLifecycle()
+    val roleFilter by viewModel.roleFilter.collectAsStateWithLifecycle()
+    val roles = listOf("All", "Admin", "Cashier")
 
     Scaffold(
         topBar = {
@@ -43,29 +48,60 @@ fun ActivityLogScreen(
             )
         }
     ) { padding ->
-        when (val currState = state) {
-            is ActivityLogState.Loading -> {
-                LoadingIndicator("Loading logs...")
-            }
-            is ActivityLogState.Error -> {
-                EmptyStateView("", "Error", currState.message, modifier = Modifier.padding(padding))
-            }
-            is ActivityLogState.Success -> {
-                if (currState.logs.isEmpty()) {
-                    EmptyStateView(
-                        emoji = "📜",
-                        title = "No Logs Yet",
-                        subtitle = "Activity logs will appear here.",
-                        modifier = Modifier.padding(padding)
+        Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+            // Date filter chips acting as calendar
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                DateFilter.values().forEach { filter ->
+                    FilterChip(
+                        selected = dateFilter == filter,
+                        onClick = { viewModel.setDateFilter(filter) },
+                        label = { Text(filter.label, style = MaterialTheme.typography.labelSmall) },
+                        shape = RoundedCornerShape(50.dp)
                     )
-                } else {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize().padding(padding),
-                        contentPadding = PaddingValues(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        items(currState.logs, key = { it.id }) { log ->
-                            LogItemCard(log)
+                }
+            }
+
+            // Role filter chips
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 0.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                roles.forEach { role ->
+                    FilterChip(
+                        selected = roleFilter == role,
+                        onClick = { viewModel.setRoleFilter(role) },
+                        label = { Text(role, style = MaterialTheme.typography.labelSmall) },
+                        shape = RoundedCornerShape(50.dp)
+                    )
+                }
+            }
+
+            when (val currState = state) {
+                is ActivityLogState.Loading -> {
+                    LoadingIndicator("Loading logs...")
+                }
+                is ActivityLogState.Error -> {
+                    EmptyStateView("", "Error", currState.message)
+                }
+                is ActivityLogState.Success -> {
+                    if (currState.logs.isEmpty()) {
+                        EmptyStateView(
+                            emoji = "📜",
+                            title = "No Logs Yet",
+                            subtitle = "Activity logs for ${dateFilter.label.lowercase()} will appear here."
+                        )
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            items(currState.logs, key = { it.id }) { log ->
+                                LogItemCard(log)
+                            }
                         }
                     }
                 }

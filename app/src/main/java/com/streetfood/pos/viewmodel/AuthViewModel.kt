@@ -30,21 +30,49 @@ class AuthViewModel : ViewModel() {
     val loginError: StateFlow<String?> = _loginError
 
     init {
-        // Check if user is already logged in
         val firebaseUser = auth.currentUser
         if (firebaseUser != null) {
-            val role = if (firebaseUser.email?.contains("admin") == true) UserRole.ADMIN else UserRole.CASHIER
-            val user = User(
-                id = firebaseUser.uid,
-                username = firebaseUser.email?.substringBefore("@") ?: "User",
-                email = firebaseUser.email ?: "",
-                role = role
-            )
-            UserSessionRepository.login(user)
-            _currentUser.value = user
-            _userRole.value = user.role.name
-            _isLoggedIn.value = true
+            val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+            db.collection("users").document(firebaseUser.uid).get()
+                .addOnSuccessListener { doc ->
+                    if (doc.exists()) {
+                        val dbUser = doc.toObject(User::class.java)?.copy(id = doc.id)
+                        if (dbUser != null) {
+                            UserSessionRepository.login(dbUser)
+                            _currentUser.value = dbUser
+                            _userRole.value = dbUser.role.name
+                            _isLoggedIn.value = true
+                        }
+                    } else {
+                        fallbackLogin(firebaseUser)
+                    }
+                }
+                .addOnFailureListener {
+                    val offlineUser = UserSessionRepository.tryOfflineLogin(firebaseUser.email ?: "", "") // We don't have password here but we try
+                    if (offlineUser != null) {
+                        UserSessionRepository.login(offlineUser)
+                        _currentUser.value = offlineUser
+                        _userRole.value = offlineUser.role.name
+                        _isLoggedIn.value = true
+                    } else {
+                        fallbackLogin(firebaseUser)
+                    }
+                }
         }
+    }
+
+    private fun fallbackLogin(firebaseUser: com.google.firebase.auth.FirebaseUser) {
+        val role = if (firebaseUser.email?.contains("admin") == true) UserRole.ADMIN else UserRole.CASHIER
+        val user = User(
+            id = firebaseUser.uid,
+            username = firebaseUser.email?.substringBefore("@") ?: "User",
+            email = firebaseUser.email ?: "",
+            role = role
+        )
+        UserSessionRepository.login(user)
+        _currentUser.value = user
+        _userRole.value = user.role.name
+        _isLoggedIn.value = true
     }
 
     fun login(email: String, password: String) {
@@ -63,20 +91,32 @@ class AuthViewModel : ViewModel() {
             .addOnSuccessListener { result ->
                 val firebaseUser = result.user
                 if (firebaseUser != null) {
-                    val role = if (firebaseUser.email?.contains("admin") == true) UserRole.ADMIN else UserRole.CASHIER
-                    val user = User(
-                        id = firebaseUser.uid,
-                        username = firebaseUser.email?.substringBefore("@") ?: "User",
-                        email = firebaseUser.email ?: "",
-                        role = role
-                    )
-                    UserSessionRepository.login(user)
-                    UserSessionRepository.saveOfflineCredentials(finalEmail, password, role.name, firebaseUser.uid)
-                    _currentUser.value = user
-                    _userRole.value = user.role.name
-                    _isLoggedIn.value = true
+                    val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                    db.collection("users").document(firebaseUser.uid).get()
+                        .addOnSuccessListener { doc ->
+                            if (doc.exists()) {
+                                val dbUser = doc.toObject(User::class.java)?.copy(id = doc.id)
+                                if (dbUser != null) {
+                                    UserSessionRepository.login(dbUser)
+                                    UserSessionRepository.saveOfflineCredentials(finalEmail, password, dbUser.role.name, firebaseUser.uid)
+                                    _currentUser.value = dbUser
+                                    _userRole.value = dbUser.role.name
+                                    _isLoggedIn.value = true
+                                }
+                            } else {
+                                fallbackLogin(firebaseUser)
+                                UserSessionRepository.saveOfflineCredentials(finalEmail, password, _userRole.value ?: "CASHIER", firebaseUser.uid)
+                            }
+                            _isLoading.value = false
+                        }
+                        .addOnFailureListener {
+                            fallbackLogin(firebaseUser)
+                            UserSessionRepository.saveOfflineCredentials(finalEmail, password, _userRole.value ?: "CASHIER", firebaseUser.uid)
+                            _isLoading.value = false
+                        }
+                } else {
+                    _isLoading.value = false
                 }
-                _isLoading.value = false
             }
             .addOnFailureListener { e ->
                 val msg = e.message ?: ""

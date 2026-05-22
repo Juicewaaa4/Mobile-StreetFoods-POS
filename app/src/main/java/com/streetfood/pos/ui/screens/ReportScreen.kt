@@ -103,7 +103,7 @@ fun ReportScreen(
         if (uri == null) return@rememberLauncherForActivityResult
         runCatching {
             context.contentResolver.openOutputStream(uri)?.bufferedWriter()?.use { writer ->
-                writer.write(buildGCashExcelHtml(state.rawGCashTransactions, state.reportDate))
+                writer.write(buildGCashExcelHtml(state.gcashRows, state.gcashTotals, state.rawGCashTransactions, state.reportDate))
             }
         }.onSuccess {
             Toast.makeText(context, "GCash Report downloaded.", Toast.LENGTH_SHORT).show()
@@ -399,17 +399,15 @@ private fun buildExcelHtml(rows: List<ReportRow>, totals: ReportTotals, reportDa
             .logo-cell { border: none !important; text-align: center; padding-bottom: 4px; }
             .brand-name {
               font-size: 26px;
-              font-weight: 900;
+              font-weight: bold;
               color: #1B5E20;
               font-family: 'Georgia', serif;
-              letter-spacing: 2px;
             }
-            .brand-sub {
-              font-size: 11px;
-              color: #388E3C;
+            .brand-name-large {
+              font-size: 32px;
               font-weight: bold;
-              letter-spacing: 4px;
-              text-transform: uppercase;
+              color: #1B5E20;
+              font-family: 'Georgia', serif;
             }
             .date-cell { border: none !important; font-weight: bold; font-size: 13px; color: #000; }
             th {
@@ -417,7 +415,6 @@ private fun buildExcelHtml(rows: List<ReportRow>, totals: ReportTotals, reportDa
               font-weight: bold;
               text-align: center;
               font-size: 12px;
-              border: 1px solid #555;
             }
             .total-row td { color: #E65100; font-weight: bold; }
             .signatory-label { border: none !important; text-align: left; font-size: 11px; }
@@ -430,12 +427,12 @@ private fun buildExcelHtml(rows: List<ReportRow>, totals: ReportTotals, reportDa
             <tr>
               <td class="no-border" colspan="3"></td>
               <td class="logo-cell" colspan="4">
-                <div class="brand-name">&#9836; ZOEY'S</div>
-                <div class="brand-name" style="font-size:32px; margin-top:-6px;">STREET FOODS</div>
+                <div class="brand-name">ZOEY'S</div>
+                <div class="brand-name-large">STREET FOODS</div>
               </td>
             </tr>
             <tr>
-              <td class="date-cell" colspan="2">Date:${esc(reportDate)}</td>
+              <td class="date-cell" colspan="2">Date: ${esc(reportDate)}</td>
               <td class="no-border" colspan="5"></td>
             </tr>
             <tr><td colspan="7" class="no-border" style="height:6px;"></td></tr>
@@ -491,6 +488,8 @@ private fun buildExcelHtml(rows: List<ReportRow>, totals: ReportTotals, reportDa
 }
 
 private fun buildGCashExcelHtml(
+    rows: List<ReportRow>,
+    totals: ReportTotals,
     transactions: List<com.streetfood.pos.data.models.Transaction>,
     reportDate: String
 ): String {
@@ -500,58 +499,41 @@ private fun buildGCashExcelHtml(
         .replace(">", "&gt;")
         .replace("\"", "&quot;")
 
-    // Build per-product aggregated rows (same as regular report) from GCash transactions only
-    val rows = transactions
-        .flatMap { it.items }
-        .groupBy { it.productName }
-        .map { (name, items) ->
-            val qty   = items.sumOf { it.quantity }
-            val gross = items.sumOf { it.totalPrice }
-            Triple(name, qty, gross)
-        }
-        .sortedBy { it.first }
+    // Collect all reference numbers from transactions
+    val refNumbers = transactions.mapNotNull { tx ->
+        tx.referenceNumber?.trim()?.takeIf { it.isNotBlank() }
+    }.distinct()
 
-    val totalQty   = rows.sumOf { it.second }
-    val totalGross = rows.sumOf { it.third }
-
-    // Reference numbers – one per transaction, de-duplicated blanks
-    val refNumbers = transactions
-        .mapIndexed { i, tx ->
-            val ref = tx.referenceNumber?.trim()?.takeIf { it.isNotBlank() } ?: "—"
-            val time = java.text.SimpleDateFormat("hh:mm a", java.util.Locale.getDefault())
-                .format(java.util.Date(tx.timestamp))
-            val refStyle = if (ref != "—")
-                "background-color:#E3F2FD; color:#0D47A1; font-weight:bold; letter-spacing:1px;"
-            else
-                "color:#999; font-style:italic;"
-            Pair(time, Pair(ref, refStyle))
-        }
-
-    // Product rows HTML — reference numbers shown in last column
-    val rowHtml = rows.mapIndexed { idx, (name, qty, gross) ->
-        val refPair = refNumbers.getOrNull(idx)
-        val ref = refPair?.second?.first ?: ""
-        val refStyle = refPair?.second?.second ?: ""
+    // Build product rows — using exact same data as All Sales Report + Reference No.
+    val rowHtml = rows.mapIndexed { idx, row ->
+        val ref = refNumbers.getOrNull(idx) ?: ""
         """
         <tr>
-          <td>${esc(name)}</td>
-          <td style="text-align:center;">$qty</td>
-          <td style="text-align:right;">${"%,.2f".format(gross)}</td>
-          <td style="$refStyle text-align:center; padding:5px 8px;">$ref</td>
+          <td>${esc(row.productName)}</td>
+          <td style="text-align:center;">${row.qtySold}</td>
+          <td style="text-align:right;">${"%,.2f".format(row.grossSales)}</td>
+          <td style="text-align:right;">&#8369; ${"%,.2f".format(row.costOfSales)}</td>
+          <td style="text-align:right;">&#8369; ${"%,.2f".format(row.netAmount)}</td>
+          <td style="text-align:center;">${"%.0f%%".format(row.percentage)}</td>
+          <td></td>
+          <td style="text-align:center; font-weight:bold; color:#0D47A1;">$ref</td>
         </tr>
         """.trimIndent()
     }.joinToString("")
 
-    // Extra ref rows if more transactions than products
+    // Extra ref rows if there are more reference numbers than products
     val extraRefRows = if (refNumbers.size > rows.size) {
-        refNumbers.drop(rows.size).joinToString("") { (time, refPair) ->
-            val (ref, refStyle) = refPair
+        refNumbers.drop(rows.size).joinToString("") { ref ->
             """
             <tr>
-              <td style="color:#aaa; font-style:italic;">$time</td>
-              <td style="text-align:center;">—</td>
-              <td style="text-align:right;">—</td>
-              <td style="$refStyle text-align:center; padding:5px 8px;">$ref</td>
+              <td></td>
+              <td style="text-align:center;"></td>
+              <td style="text-align:right;"></td>
+              <td style="text-align:right;"></td>
+              <td style="text-align:right;"></td>
+              <td style="text-align:center;"></td>
+              <td></td>
+              <td style="text-align:center; font-weight:bold; color:#0D47A1;">$ref</td>
             </tr>
             """.trimIndent()
         }
@@ -569,10 +551,22 @@ private fun buildGCashExcelHtml(
             .logo-cell { border: none !important; text-align: center; padding-bottom: 4px; }
             .brand-name {
               font-size: 26px;
-              font-weight: 900;
+              font-weight: bold;
               color: #1B5E20;
               font-family: 'Georgia', serif;
+            }
+            .brand-name-large {
+              font-size: 32px;
+              font-weight: bold;
+              color: #1B5E20;
+              font-family: 'Georgia', serif;
+            }
+            .gcash-title {
+              font-size: 11px;
+              color: #005CEE;
+              font-weight: bold;
               letter-spacing: 2px;
+              margin-top: 2px;
             }
             .date-cell { border: none !important; font-weight: bold; font-size: 13px; color: #000; }
             th {
@@ -580,7 +574,6 @@ private fun buildGCashExcelHtml(
               font-weight: bold;
               text-align: center;
               font-size: 12px;
-              border: 1px solid #555;
             }
             .total-row td { color: #E65100; font-weight: bold; }
             .signatory-label { border: none !important; text-align: left; font-size: 11px; }
@@ -589,58 +582,66 @@ private fun buildGCashExcelHtml(
         </head>
         <body>
           <table>
-            <!-- Header: Zoey's branding (same as All report) -->
+            <!-- Logo / header rows -->
             <tr>
-              <td class="no-border" colspan="2"></td>
-              <td class="logo-cell" colspan="2">
-                <div class="brand-name">&#9836; ZOEY'S</div>
-                <div class="brand-name" style="font-size:32px; margin-top:-6px;">STREET FOODS</div>
-                <div style="font-size:11px; color:#005CEE; font-weight:bold; letter-spacing:2px; margin-top:2px;">GCash Transactions</div>
+              <td class="no-border" colspan="3"></td>
+              <td class="logo-cell" colspan="5">
+                <div class="brand-name">ZOEY'S</div>
+                <div class="brand-name-large">STREET FOODS</div>
+                <div class="gcash-title">GCash Transactions</div>
               </td>
             </tr>
             <tr>
-              <td class="date-cell" colspan="2">Date:${esc(reportDate)}</td>
-              <td class="no-border" colspan="2"></td>
+              <td class="date-cell" colspan="2">Date: ${esc(reportDate)}</td>
+              <td class="no-border" colspan="6"></td>
             </tr>
-            <tr><td colspan="4" class="no-border" style="height:6px;"></td></tr>
+            <tr><td colspan="8" class="no-border" style="height:6px;"></td></tr>
             <!-- Column headers -->
             <tr>
               <th>PRODUCT</th>
               <th>SOLD(PC'S)</th>
               <th>GROSS SALES</th>
+              <th>COST OF SALES</th>
+              <th>NET AMOUNT</th>
+              <th>PERCENTAGE</th>
+              <th>REMARKS</th>
               <th style="background-color:#E3F2FD; color:#0D47A1;">REFERENCE NO.</th>
             </tr>
             $rowHtml$extraRefRows
             <!-- Totals -->
             <tr class="total-row">
               <td>Total</td>
-              <td style="text-align:center;">$totalQty</td>
-              <td style="text-align:right;">${"%,.2f".format(totalGross)}</td>
+              <td style="text-align:center;">${totals.totalQty}</td>
+              <td style="text-align:right;">${"%,.2f".format(totals.totalGross)}</td>
+              <td style="text-align:right;">&#8369; ${"%,.2f".format(totals.totalCost)}</td>
+              <td style="text-align:right;">&#8369; ${"%,.2f".format(totals.totalNet)}</td>
+              <td style="text-align:center;">${"%.0f%%".format(totals.avgPercentage)}</td>
+              <td></td>
               <td></td>
             </tr>
             <!-- Spacer -->
-            <tr><td colspan="4" class="no-border" style="height:12px;"></td></tr>
-            <tr><td colspan="4" class="no-border" style="height:12px;"></td></tr>
+            <tr><td colspan="8" class="no-border" style="height:12px;"></td></tr>
+            <tr><td colspan="8" class="no-border" style="height:12px;"></td></tr>
             <!-- Signatories -->
             <tr>
-              <td class="no-border" colspan="2"></td>
+              <td class="no-border" colspan="5"></td>
               <td class="signatory-label">Prepared By:</td>
-              <td class="signatory-name">Kenneth Francisco</td>
+              <td class="signatory-name" colspan="2">Kenneth Francisco</td>
             </tr>
             <tr>
-              <td class="no-border" colspan="2"></td>
+              <td class="no-border" colspan="5"></td>
               <td class="signatory-label">Reviewed By:</td>
-              <td class="signatory-name">Judy Peralta</td>
+              <td class="signatory-name" colspan="2">Judy Peralta</td>
             </tr>
             <tr>
-              <td class="no-border" colspan="2"></td>
+              <td class="no-border" colspan="5"></td>
               <td class="signatory-label">Checked By:</td>
-              <td class="signatory-name">Trecia E. De Jesus</td>
+              <td class="signatory-name" colspan="2">Trecia E. De Jesus</td>
             </tr>
             <tr>
-              <td class="no-border" colspan="2"></td>
+              <td class="no-border" colspan="5"></td>
               <td class="signatory-label">Noted By:</td>
-              <td class="signatory-name">Enrique DM Martinez</td>
+              <td class="signatory-name" colspan="2">Enrique DM Martinez</td>
             </tr>
           </table>
         </body>

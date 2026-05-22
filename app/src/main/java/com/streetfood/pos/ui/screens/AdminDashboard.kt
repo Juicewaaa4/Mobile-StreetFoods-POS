@@ -64,11 +64,17 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
+import android.widget.Toast
+import com.streetfood.pos.viewmodel.ActivityLogViewModel
+import androidx.compose.material.icons.filled.DeleteSweep
+import androidx.compose.material3.RadioButton
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AdminDashboard(
     transactionViewModel: TransactionViewModel,
     analyticsViewModel: AnalyticsViewModel,
+    activityLogViewModel: ActivityLogViewModel,
     onNavigateToPOS: () -> Unit,
     onNavigateToProducts: () -> Unit,
     onNavigateToAnalytics: () -> Unit,
@@ -89,6 +95,7 @@ fun AdminDashboard(
 
     val analyticsState by analyticsViewModel.analyticsData.collectAsStateWithLifecycle()
     var showLogoutConfirm by remember { mutableStateOf(false) }
+    var showPurgeDialog by remember { mutableStateOf(false) }
 
     val todayRevenue = (analyticsState as? UiState.Success)?.data?.totalRevenue ?: 0.0
     val todayCount = (analyticsState as? UiState.Success)?.data?.transactionCount ?: 0
@@ -179,6 +186,7 @@ fun AdminDashboard(
                     AdminNavCard("Transaction History", "Browse all past transactions", Icons.Default.History, onNavigateToHistory)
                     AdminNavCard("Sales Report", "Generate and download date-based sales reports", Icons.Default.Assessment, onNavigateToReports)
                     AdminNavCard("User Management", "Create, edit, and delete staff accounts", Icons.Default.ManageAccounts, onNavigateToUsers)
+                    AdminNavCard("Purge Old Data", "Free up space by deleting old logs and transactions", Icons.Default.DeleteSweep, onClick = { showPurgeDialog = true })
                 }
             }
 
@@ -196,6 +204,87 @@ fun AdminDashboard(
             onDismiss = { showLogoutConfirm = false }
         )
     }
+
+    var showPurgeConfirmDialog by remember { mutableStateOf<Long?>(null) }
+
+    if (showPurgeDialog) {
+        PurgeDataDialog(
+            onDismiss = { showPurgeDialog = false },
+            onConfirm = { cutoff ->
+                showPurgeConfirmDialog = cutoff
+                showPurgeDialog = false
+            }
+        )
+    }
+
+    showPurgeConfirmDialog?.let { cutoff ->
+        ConfirmDialog(
+            title = "Final Confirmation",
+            message = "Are you absolutely sure you want to permanently delete all data older than the selected timeframe? This action cannot be undone.",
+            confirmLabel = "Yes, Delete",
+            isDestructive = true,
+            onConfirm = {
+                showPurgeConfirmDialog = null
+                var txDone = false
+                var logDone = false
+                transactionViewModel.purgeOldData(cutoff) { 
+                    txDone = true
+                    if (logDone) Toast.makeText(context, "Data purge successful", Toast.LENGTH_SHORT).show()
+                }
+                activityLogViewModel.purgeOldData(cutoff) { 
+                    logDone = true
+                    if (txDone) Toast.makeText(context, "Data purge successful", Toast.LENGTH_SHORT).show()
+                }
+            },
+            onDismiss = { showPurgeConfirmDialog = null }
+        )
+    }
+}
+
+@Composable
+fun PurgeDataDialog(onDismiss: () -> Unit, onConfirm: (Long) -> Unit) {
+    val options = listOf(
+        "Older than 7 Days" to 7,
+        "Older than 1 Month" to 30,
+        "Older than 3 Months" to 90,
+        "Older than 6 Months" to 180
+    )
+    var selectedOption by remember { mutableStateOf(options[0]) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Purge Old Data", fontWeight = FontWeight.Bold) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Select timeframe to delete old transactions and activity logs. This cannot be undone.", style = MaterialTheme.typography.bodyMedium)
+                Spacer(Modifier.height(8.dp))
+                options.forEach { option ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = selectedOption == option,
+                            onClick = { selectedOption = option }
+                        )
+                        Text(option.first, style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    val cal = Calendar.getInstance()
+                    cal.add(Calendar.DAY_OF_YEAR, -selectedOption.second)
+                    onConfirm(cal.timeInMillis)
+                }
+            ) { Text("Purge Data", color = MaterialTheme.colorScheme.error) }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

@@ -27,6 +27,61 @@ class ActivityLogRepository(private val db: FirebaseFirestore) {
         awaitClose { listener.remove() }
     }
 
+    fun getLogsByDateRange(start: Long, end: Long): Flow<List<ActivityLog>> = callbackFlow {
+        val listener = logsCollection
+            .whereGreaterThanOrEqualTo("timestamp", start)
+            .whereLessThanOrEqualTo("timestamp", end)
+            .orderBy("timestamp", Query.Direction.DESCENDING)
+            .limit(500)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    close(error)
+                    return@addSnapshotListener
+                }
+                if (snapshot != null) {
+                    trySend(snapshot.documents.mapNotNull { it.toObject(ActivityLog::class.java)?.copy(id = it.id) })
+                }
+            }
+        awaitClose { listener.remove() }
+    }
+
+    fun deleteOlderThan(timestamp: Long, onComplete: (Boolean) -> Unit) {
+        logsCollection
+            .whereLessThan("timestamp", timestamp)
+            .get()
+            .addOnSuccessListener { snapshot ->
+                val docs = snapshot.documents
+                if (docs.isEmpty()) {
+                    onComplete(true)
+                    return@addOnSuccessListener
+                }
+
+                val batches = docs.chunked(500)
+                var completedBatches = 0
+                var hasError = false
+
+                batches.forEach { chunk ->
+                    val batch = db.batch()
+                    chunk.forEach { doc -> batch.delete(doc.reference) }
+                    batch.commit()
+                        .addOnSuccessListener {
+                            completedBatches++
+                            if (completedBatches == batches.size) {
+                                onComplete(!hasError)
+                            }
+                        }
+                        .addOnFailureListener {
+                            hasError = true
+                            completedBatches++
+                            if (completedBatches == batches.size) {
+                                onComplete(false)
+                            }
+                        }
+                }
+            }
+            .addOnFailureListener { onComplete(false) }
+    }
+
     fun logAction(actionType: String, details: String) {
         val userName = UserSessionRepository.username
         val userRole = UserSessionRepository.currentRole?.name ?: "Unknown"

@@ -72,4 +72,41 @@ class TransactionRepository(private val db: FirebaseFirestore) {
             .addOnSuccessListener { cont.resume(Unit) }
             .addOnFailureListener { cont.resumeWithException(it) }
         }
+
+    fun deleteOlderThan(timestamp: Long, onComplete: (Boolean) -> Unit) {
+        transactionsCollection
+            .whereLessThan("timestamp", timestamp)
+            .get()
+            .addOnSuccessListener { snapshot ->
+                val docs = snapshot.documents
+                if (docs.isEmpty()) {
+                    onComplete(true)
+                    return@addOnSuccessListener
+                }
+
+                val batches = docs.chunked(500)
+                var completedBatches = 0
+                var hasError = false
+
+                batches.forEach { chunk ->
+                    val batch = db.batch()
+                    chunk.forEach { doc -> batch.delete(doc.reference) }
+                    batch.commit()
+                        .addOnSuccessListener {
+                            completedBatches++
+                            if (completedBatches == batches.size) {
+                                onComplete(!hasError)
+                            }
+                        }
+                        .addOnFailureListener {
+                            hasError = true
+                            completedBatches++
+                            if (completedBatches == batches.size) {
+                                onComplete(false)
+                            }
+                        }
+                }
+            }
+            .addOnFailureListener { onComplete(false) }
+    }
 }
