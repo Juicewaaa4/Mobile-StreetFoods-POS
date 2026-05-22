@@ -19,7 +19,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-class ProductViewModel(private val repo: ProductRepository) : ViewModel() {
+class ProductViewModel(private val repo: ProductRepository, private val logRepo: com.streetfood.pos.data.repository.ActivityLogRepository) : ViewModel() {
 
     private val _userMessages = MutableSharedFlow<String>(
         extraBufferCapacity = 8,
@@ -30,7 +30,7 @@ class ProductViewModel(private val repo: ProductRepository) : ViewModel() {
     val products: StateFlow<UiState<List<Product>>> = repo.getAllProducts()
         .map { list ->
             val sorted = list.sortedWith(
-                compareBy({ !it.isAvailable }, { it.name.lowercase(Locale.getDefault()) })
+                compareBy({ it.stock <= 0 }, { it.name.lowercase(Locale.getDefault()) })
             )
             if (sorted.isEmpty()) UiState.Empty else UiState.Success(sorted)
         }
@@ -46,6 +46,7 @@ class ProductViewModel(private val repo: ProductRepository) : ViewModel() {
         viewModelScope.launch {
             try {
                 repo.insertProduct(product)
+                logRepo.logAction("Add Product", "Added ${product.name} with ${product.stock} stock")
                 _userMessages.emit("Product saved.")
             } catch (e: Exception) {
                 _userMessages.emit(mapFirestoreOrNetworkError(e))
@@ -53,10 +54,16 @@ class ProductViewModel(private val repo: ProductRepository) : ViewModel() {
         }
     }
 
-    fun updateProduct(product: Product, notify: Boolean = true) {
+    fun updateProduct(product: Product, notify: Boolean = true, oldStock: Int? = null) {
         viewModelScope.launch {
             try {
                 repo.updateProduct(product)
+                val diff = if (oldStock != null) product.stock - oldStock else 0
+                val detail = if (diff > 0) "Added $diff to ${product.name} (Now: ${product.stock})"
+                             else if (diff < 0) "Removed ${-diff} from ${product.name} (Now: ${product.stock})"
+                             else "Updated ${product.name}"
+                logRepo.logAction("Update Product", detail)
+
                 if (notify) _userMessages.emit("Product changes saved.")
             } catch (e: Exception) {
                 _userMessages.emit(mapFirestoreOrNetworkError(e))
@@ -68,17 +75,8 @@ class ProductViewModel(private val repo: ProductRepository) : ViewModel() {
         viewModelScope.launch {
             try {
                 repo.deleteProduct(product)
+                logRepo.logAction("Delete Product", "Deleted ${product.name}")
                 _userMessages.emit("Product deleted.")
-            } catch (e: Exception) {
-                _userMessages.emit(mapFirestoreOrNetworkError(e))
-            }
-        }
-    }
-
-    fun toggleAvailability(product: Product) {
-        viewModelScope.launch {
-            try {
-                repo.updateProduct(product.copy(isAvailable = !product.isAvailable))
             } catch (e: Exception) {
                 _userMessages.emit(mapFirestoreOrNetworkError(e))
             }

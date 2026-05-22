@@ -59,12 +59,14 @@ class TransactionRepository(private val db: FirebaseFirestore) {
         suspendCancellableCoroutine { cont ->
             transactionsCollection.document().set(
                 mapOf(
-                    "timestamp"    to transaction.timestamp,
-                    "totalAmount"  to transaction.totalAmount,
-                    "cashReceived" to transaction.cashReceived,
-                    "change"       to transaction.change,
-                    "cashierName"  to transaction.cashierName,
-                    "items"        to transaction.items
+                    "timestamp"       to transaction.timestamp,
+                    "totalAmount"     to transaction.totalAmount,
+                    "cashReceived"    to transaction.cashReceived,
+                    "change"          to transaction.change,
+                    "cashierName"     to transaction.cashierName,
+                    "items"           to transaction.items,
+                    "paymentMethod"   to transaction.paymentMethod,
+                    "referenceNumber" to transaction.referenceNumber
                 )
             )
             .addOnSuccessListener { cont.resume(Unit) }

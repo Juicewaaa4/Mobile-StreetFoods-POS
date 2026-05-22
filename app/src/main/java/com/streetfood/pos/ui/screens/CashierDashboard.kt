@@ -29,6 +29,7 @@ import android.app.Activity
 fun CashierDashboard(
     transactionViewModel: TransactionViewModel,
     onNavigateToPOS: () -> Unit,
+    onNavigateToProducts: () -> Unit,
     onLogout: () -> Unit
 ) {
     val cashierName = UserSessionRepository.username
@@ -111,8 +112,14 @@ fun CashierDashboard(
                     label = { Text("POS") }
                 )
                 NavigationBarItem(
-                    selected = selectedTab == 2,
-                    onClick = { selectedTab = 2 },
+                    selected = false,
+                    onClick = onNavigateToProducts,
+                    icon = { Icon(Icons.Default.Inventory, contentDescription = "Inventory") },
+                    label = { Text("Inventory") }
+                )
+                NavigationBarItem(
+                    selected = selectedTab == 3,
+                    onClick = { selectedTab = 3 },
                     icon = { Icon(Icons.Default.Receipt, contentDescription = "My Sales") },
                     label = { Text("My Sales") }
                 )
@@ -128,7 +135,7 @@ fun CashierDashboard(
                 onStartSelling = onNavigateToPOS,
                 modifier = Modifier.padding(padding)
             )
-            2 -> CashierMySalesTab(
+            3 -> CashierMySalesTab(
                 transactions = todayTransactions,
                 transactionViewModel = transactionViewModel,
                 modifier = Modifier.padding(padding)

@@ -37,7 +37,17 @@ fun PaymentScreen(
     var cashInput by remember { mutableStateOf("") }
     val cashValue by remember { derivedStateOf { digitsToPeso(cashInput) } }
     val change by remember { derivedStateOf { (cashValue - totalAmount).coerceAtLeast(0.0) } }
+    
+    var paymentMethod by remember { mutableStateOf("Cash") }
+    var referenceNumber by remember { mutableStateOf("") }
+    
+
     val isSufficient by remember { derivedStateOf { cashValue >= totalAmount } }
+    val canComplete by remember { 
+        derivedStateOf { 
+            isSufficient && (paymentMethod == "Cash" || referenceNumber.isNotBlank()) 
+        } 
+    }
 
     var receiptData by remember { mutableStateOf<ReceiptData?>(null) }
     var pendingItems by remember { mutableStateOf<List<CartItem>>(emptyList()) }
@@ -65,7 +75,7 @@ fun PaymentScreen(
         pendingTotal = totalAmount
         pendingCash = cashValue
         pendingChange = change
-        posViewModel.processTransaction(cashInput)
+        posViewModel.processTransaction(cashInput, paymentMethod, referenceNumber)
     }
 
     Scaffold(
@@ -175,29 +185,83 @@ fun PaymentScreen(
                     }
                 }
 
-                // ── Quick Amount Buttons ──
+                // ── Payment Method ──
                 item {
-                    Text("Quick amounts", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("Payment Method", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.height(8.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        AssistChip(
-                            onClick = { cashInput = pesoInputText(totalAmount) },
-                            label = { Text("Exact") },
-                            leadingIcon = { Icon(Icons.Default.Check, null, Modifier.size(16.dp)) }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(
+                            selected = paymentMethod == "Cash",
+                            onClick = { paymentMethod = "Cash" },
+                            label = { Text("Cash") },
+                            modifier = Modifier.weight(1f),
+                            leadingIcon = { if (paymentMethod == "Cash") Icon(Icons.Default.Check, null) }
                         )
-                        listOf(20.0, 50.0, 100.0, 500.0).forEach { add ->
+                        FilterChip(
+                            selected = paymentMethod == "GCash",
+                            onClick = { paymentMethod = "GCash" },
+                            label = { Text("GCash") },
+                            modifier = Modifier.weight(1f),
+                            leadingIcon = { if (paymentMethod == "GCash") Icon(Icons.Default.Check, null) }
+                        )
+                    }
+                }
+
+                // ── Quick Amount Buttons (Only for Cash) ──
+                if (paymentMethod == "Cash") {
+                    item {
+                        Text("Quick amounts", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Spacer(Modifier.height(8.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             AssistChip(
-                                onClick = {
-                                    cashInput = pesoInputText((cashValue + add).coerceAtMost(999_999.99))
-                                },
-                                label = { Text("+${add.toInt()}") }
+                                onClick = { cashInput = pesoInputText(totalAmount) },
+                                label = { Text("Exact") },
+                                leadingIcon = { Icon(Icons.Default.Check, null, Modifier.size(16.dp)) }
                             )
+                            listOf(20.0, 50.0, 100.0, 500.0).forEach { add ->
+                                AssistChip(
+                                    onClick = {
+                                        cashInput = pesoInputText((cashValue + add).coerceAtMost(999_999.99))
+                                    },
+                                    label = { Text("+${add.toInt()}") }
+                                )
+                            }
                         }
                     }
                 }
 
-                // ── Cash Input Field ──
+                // ── Input Fields ──
                 item {
+                    if (paymentMethod == "GCash") {
+                        OutlinedTextField(
+                            value = referenceNumber,
+                            onValueChange = { 
+                                val digits = it.filter { char -> char.isDigit() }
+                                if (digits.length <= 13) referenceNumber = digits 
+                            },
+                            label = { Text("GCash Reference Number") },
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                            singleLine = true,
+                            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                                keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
+                            ),
+                            isError = referenceNumber.isBlank(),
+                            supportingText = {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    if (referenceNumber.isBlank()) {
+                                        Text("Reference number is required", color = MaterialTheme.colorScheme.error)
+                                    } else {
+                                        Spacer(Modifier.weight(1f))
+                                    }
+                                    Text("${referenceNumber.length}/13", color = if (referenceNumber.length == 13) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                        )
+                    }
+                    
                     OutlinedTextField(
                         value = cashInput,
                         onValueChange = { newValue ->
@@ -205,7 +269,7 @@ fun PaymentScreen(
                                 cashInput = newValue
                             }
                         },
-                        label = { Text("Amount Received") },
+                        label = { Text(if (paymentMethod == "GCash") "Amount Sent" else "Amount Received") },
                         modifier = Modifier.fillMaxWidth(),
                         keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
                             keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
@@ -220,7 +284,7 @@ fun PaymentScreen(
                         onClick = { pay() },
                         modifier = Modifier.fillMaxWidth().height(56.dp),
                         shape = RoundedCornerShape(14.dp),
-                        enabled = isSufficient && !isProcessing
+                        enabled = canComplete && !isProcessing
                     ) {
                         if (isProcessing) {
                             CircularProgressIndicator(modifier = Modifier.size(22.dp), color = MaterialTheme.colorScheme.onPrimary, strokeWidth = 2.5.dp)

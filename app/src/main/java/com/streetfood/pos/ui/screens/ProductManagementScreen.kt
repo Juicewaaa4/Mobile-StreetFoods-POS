@@ -14,7 +14,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.streetfood.pos.data.models.Product
 import com.streetfood.pos.data.models.UiState
@@ -50,11 +52,13 @@ fun ProductManagementScreen(
             )
         },
         floatingActionButton = {
-            FloatingActionButton(
-                onClick = { showAddDialog = true },
-                containerColor = MaterialTheme.colorScheme.primary
-            ) {
-                Icon(Icons.Default.Add, "Add Product", tint = MaterialTheme.colorScheme.onPrimary)
+            if (com.streetfood.pos.data.repository.UserSessionRepository.isAdmin) {
+                FloatingActionButton(
+                    onClick = { showAddDialog = true },
+                    containerColor = MaterialTheme.colorScheme.primary
+                ) {
+                    Icon(Icons.Default.Add, "Add Product", tint = MaterialTheme.colorScheme.onPrimary)
+                }
             }
         },
         snackbarHost = { SnackbarHost(snackbarHostState) }
@@ -94,10 +98,11 @@ fun ProductManagementScreen(
                                 modifier = Modifier.width(70.dp)
                             )
                             Text(
-                                "Avail",
+                                "Stock",
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.width(46.dp)
+                                modifier = Modifier.width(50.dp),
+                                textAlign = TextAlign.Center
                             )
                             Spacer(Modifier.width(80.dp)) // edit + delete
                         }
@@ -107,9 +112,12 @@ fun ProductManagementScreen(
                     items(state.data, key = { it.id }) { product ->
                         ProductRow(
                             product = product,
+                            isAdmin = com.streetfood.pos.data.repository.UserSessionRepository.isAdmin,
                             onEdit = { editProduct = product },
                             onDelete = { deleteProduct = product },
-                            onToggle = { productViewModel.toggleAvailability(product) }
+                            onStockUpdate = { newStock -> 
+                                productViewModel.updateProduct(product.copy(stock = newStock), notify = false, oldStock = product.stock)
+                            }
                         )
                         Divider(
                             thickness = 0.5.dp,
@@ -144,17 +152,27 @@ fun ProductManagementScreen(
         )
     }
 
-    // Add / Edit dialog
     if (showAddDialog || editProduct != null) {
-        ProductFormDialog(
-            existing = editProduct,
-            onDismiss = { showAddDialog = false; editProduct = null },
-            onSave = { product ->
-                if (editProduct != null) productViewModel.updateProduct(product)
-                else productViewModel.addProduct(product)
-                showAddDialog = false; editProduct = null
-            }
-        )
+        if (com.streetfood.pos.data.repository.UserSessionRepository.isAdmin || showAddDialog) {
+            ProductFormDialog(
+                existing = editProduct,
+                onDismiss = { showAddDialog = false; editProduct = null },
+                onSave = { product ->
+                    if (editProduct != null) productViewModel.updateProduct(product, oldStock = editProduct?.stock)
+                    else productViewModel.addProduct(product)
+                    showAddDialog = false; editProduct = null
+                }
+            )
+        } else {
+            StockUpdateDialog(
+                existing = editProduct!!,
+                onDismiss = { editProduct = null },
+                onSave = { newStock ->
+                    productViewModel.updateProduct(editProduct!!.copy(stock = newStock), oldStock = editProduct?.stock)
+                    editProduct = null
+                }
+            )
+        }
     }
 }
 
@@ -163,16 +181,11 @@ fun ProductManagementScreen(
 @Composable
 private fun ProductRow(
     product: Product,
+    isAdmin: Boolean,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
-    onToggle: () -> Unit
+    onStockUpdate: (Int) -> Unit
 ) {
-    // When isEditMode = true, the Avail switch becomes interactive.
-    // Tapping Edit once enables edit mode (switch can be toggled).
-    // Tapping the checkmark (Edit button again) opens the full edit dialog
-    // and exits edit mode.
-    var isEditMode by remember { mutableStateOf(false) }
-
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -190,7 +203,7 @@ private fun ProductRow(
                 else
                     MaterialTheme.colorScheme.onSurfaceVariant
             )
-            if (product.cost > 0) {
+            if (isAdmin && product.cost > 0) {
                 Text(
                     "Cost: ${formatPeso(product.cost)}",
                     style = MaterialTheme.typography.bodySmall,
@@ -208,66 +221,97 @@ private fun ProductRow(
             modifier = Modifier.width(70.dp)
         )
 
-        // Avail switch — disabled until Edit is tapped
-        Switch(
-            checked = product.isAvailable,
-            onCheckedChange = {
-                if (isEditMode) {
-                    onToggle()
-                    isEditMode = false
-                }
-            },
-            enabled = isEditMode,
-            modifier = Modifier
-                .width(46.dp)
-                .padding(end = 4.dp),
-            colors = SwitchDefaults.colors(
-                checkedThumbColor = Color.White,
-                checkedTrackColor = MaterialTheme.colorScheme.primary,
-                // Dimmed appearance when not in edit mode
-                disabledCheckedThumbColor = Color.White,
-                disabledCheckedTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.45f),
-                disabledUncheckedThumbColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
-                disabledUncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant
-            )
+        // Stock
+        Text(
+            if (product.stock > 0) "${product.stock} pc" else "Out",
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Bold,
+            color = if (product.stock > 0) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.error,
+            modifier = Modifier.width(50.dp),
+            textAlign = TextAlign.Center
         )
 
-        // Edit / Confirm icon
-        // First tap  → enters edit mode (switch becomes interactive)
-        // Second tap → exits edit mode and opens full-edit dialog
-        IconButton(
-            onClick = {
-                if (isEditMode) {
-                    isEditMode = false
-                    onEdit()
-                } else {
-                    isEditMode = true
-                }
-            },
-            modifier = Modifier.size(40.dp)
-        ) {
-            Icon(
-                imageVector = if (isEditMode) Icons.Default.Check else Icons.Default.Edit,
-                contentDescription = if (isEditMode) "Confirm" else "Edit",
-                tint = if (isEditMode) Color(0xFF2E7D32) else MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(20.dp)
-            )
-        }
+        if (isAdmin) {
+            // Edit icon
+            IconButton(
+                onClick = onEdit,
+                modifier = Modifier.size(40.dp)
+            ) {
+                Icon(
+                    Icons.Default.Edit,
+                    contentDescription = "Edit",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
 
-        // Delete button
-        IconButton(onClick = onDelete, modifier = Modifier.size(40.dp)) {
-            Icon(
-                Icons.Default.Delete, "Delete",
-                tint = MaterialTheme.colorScheme.error,
-                modifier = Modifier.size(20.dp)
-            )
+            // Delete button
+            IconButton(onClick = onDelete, modifier = Modifier.size(40.dp)) {
+                Icon(
+                    Icons.Default.Delete, "Delete",
+                    tint = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+        } else {
+            // Cashier can only edit stock, so we just provide an "Update Stock" button
+            IconButton(
+                onClick = onEdit,
+                modifier = Modifier.size(40.dp)
+            ) {
+                Icon(
+                    Icons.Default.Inventory,
+                    contentDescription = "Update Stock",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+            Spacer(modifier = Modifier.width(40.dp)) // To keep alignment
         }
     }
 }
 
+@Composable
+private fun StockUpdateDialog(
+    existing: Product,
+    onDismiss: () -> Unit,
+    onSave: (Int) -> Unit
+) {
+    var stockText by remember { mutableStateOf(existing.stock.toString()) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(16.dp),
+        title = { Text("Update Stock: ${existing.name}", fontWeight = FontWeight.Bold) },
+        text = {
+            OutlinedTextField(
+                value = stockText,
+                onValueChange = { stockText = it },
+                label = { Text("Current Stock") },
+                modifier = Modifier.fillMaxWidth(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                shape = RoundedCornerShape(10.dp),
+                singleLine = true,
+                leadingIcon = { Icon(Icons.Default.Inventory, null) }
+            )
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    val finalStock = (stockText.toIntOrNull() ?: 0).coerceAtLeast(0)
+                    onSave(finalStock)
+                },
+                shape = RoundedCornerShape(10.dp)
+            ) { Text("Save", fontWeight = FontWeight.Bold) }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
+}
+
 // ─── Add / Edit Dialog ───────────────────────────────────────────────────────
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ProductFormDialog(
     existing: Product?,
@@ -289,7 +333,7 @@ private fun ProductFormDialog(
             } ?: ""
         )
     }
-    var isAvailable by remember { mutableStateOf(existing?.isAvailable ?: true) }
+    var stockText by remember { mutableStateOf(existing?.stock?.toString() ?: "0") }
     var nameError by remember { mutableStateOf<String?>(null) }
     var priceError by remember { mutableStateOf<String?>(null) }
 
@@ -385,21 +429,24 @@ private fun ProductFormDialog(
                 }
                 // ─────────────────────────────────────────────────────────
 
-                // Available toggle
-                Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("Available for sale", style = MaterialTheme.typography.bodyMedium)
-                    Switch(checked = isAvailable, onCheckedChange = { isAvailable = it })
-                }
+                // Stock Field
+                OutlinedTextField(
+                    value = stockText,
+                    onValueChange = { stockText = it },
+                    label = { Text("Initial / Current Stock") },
+                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    shape = RoundedCornerShape(10.dp),
+                    singleLine = true,
+                    leadingIcon = { Icon(Icons.Default.Inventory, null, tint = MaterialTheme.colorScheme.onSurfaceVariant) }
+                )
             }
         },
         confirmButton = {
             Button(
                 onClick = {
                     val finalPrice = priceText.toDoubleOrNull()
+                    val finalStock = (stockText.toIntOrNull() ?: 0).coerceAtLeast(0)
                     when {
                         name.isBlank()                     -> nameError = "Product name is required"
                         finalPrice == null || finalPrice <= 0 -> priceError = "Enter a valid price"
@@ -409,7 +456,7 @@ private fun ProductFormDialog(
                                 name = name.trim(),
                                 price = finalPrice,
                                 cost = costText.toDoubleOrNull() ?: 0.0,
-                                isAvailable = isAvailable
+                                stock = finalStock
                             )
                         )
                     }

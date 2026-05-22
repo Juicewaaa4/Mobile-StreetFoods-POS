@@ -43,9 +43,13 @@ data class ReportTotals(
 data class ReportState(
     val rows: List<ReportRow> = emptyList(),
     val totals: ReportTotals = ReportTotals(0, 0.0, 0.0, 0.0, 0.0),
+    val gcashRows: List<ReportRow> = emptyList(),
+    val gcashTotals: ReportTotals = ReportTotals(0, 0.0, 0.0, 0.0, 0.0),
+    val rawGCashTransactions: List<com.streetfood.pos.data.models.Transaction> = emptyList(),
     val reportDate: String = "",
     val isLoading: Boolean = true,
-    val error: String? = null
+    val error: String? = null,
+    val debugMethods: String = ""
 )
 
 class ReportViewModel(
@@ -76,30 +80,19 @@ class ReportViewModel(
         if (transactions.isEmpty()) {
             ReportState(isLoading = false, reportDate = dateLabel)
         } else {
-            val rows = transactions
-                .flatMap { it.items }
-                .groupBy { it.productName }
-                .map { (name, items) ->
-                    val qty = items.sumOf { it.quantity }
-                    val gross = items.sumOf { it.totalPrice }
-                    val cost = (costMap[name] ?: 0.0) * qty
-                    val net = gross - cost
-                    val pct = if (gross > 0.0) (net / gross) * 100.0 else 0.0
-                    ReportRow(name, qty, gross, cost, net, pct)
-                }
-                .sortedBy { it.productName }
-
-            val totalQty = rows.sumOf { it.qtySold }
-            val totalGross = rows.sumOf { it.grossSales }
-            val totalCost = rows.sumOf { it.costOfSales }
-            val totalNet = rows.sumOf { it.netAmount }
-            val avgPct = if (totalGross > 0.0) (totalNet / totalGross) * 100.0 else 0.0
+            val (rows, totals) = buildRowsAndTotals(transactions, costMap)
+            val gcashTransactions = transactions.filter { it.paymentMethod == "GCash" }
+            val (gcashRows, gcashTotals) = buildRowsAndTotals(gcashTransactions, costMap)
 
             ReportState(
                 rows = rows,
-                totals = ReportTotals(totalQty, totalGross, totalCost, totalNet, avgPct),
+                totals = totals,
+                gcashRows = gcashRows,
+                gcashTotals = gcashTotals,
+                rawGCashTransactions = gcashTransactions,
                 reportDate = dateLabel,
-                isLoading = false
+                isLoading = false,
+                debugMethods = transactions.joinToString { it.paymentMethod }
             )
         }
     }.catch { e ->
@@ -109,6 +102,32 @@ class ReportViewModel(
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = ReportState(isLoading = true)
     )
+
+    private fun buildRowsAndTotals(transactions: List<com.streetfood.pos.data.models.Transaction>, costMap: Map<String, Double>): Pair<List<ReportRow>, ReportTotals> {
+        val rows = transactions
+            .flatMap { it.items }
+            .groupBy { it.productName }
+            .map { (name, items) ->
+                val qty = items.sumOf { it.quantity }
+                val gross = items.sumOf { it.totalPrice }
+                val cost = items.sumOf { item ->
+                    if (item.unitCost > 0.0) item.unitCost * item.quantity
+                    else (costMap[name] ?: 0.0) * item.quantity
+                }
+                val net = gross - cost
+                val pct = if (gross > 0.0) (net / gross) * 100.0 else 0.0
+                ReportRow(name, qty, gross, cost, net, pct)
+            }
+            .sortedBy { it.productName }
+
+        val totalQty = rows.sumOf { it.qtySold }
+        val totalGross = rows.sumOf { it.grossSales }
+        val totalCost = rows.sumOf { it.costOfSales }
+        val totalNet = rows.sumOf { it.netAmount }
+        val avgPct = if (totalGross > 0.0) (totalNet / totalGross) * 100.0 else 0.0
+
+        return rows to ReportTotals(totalQty, totalGross, totalCost, totalNet, avgPct)
+    }
 
     fun setFilter(filter: DateFilter) {
         _customDateMillis.value = null

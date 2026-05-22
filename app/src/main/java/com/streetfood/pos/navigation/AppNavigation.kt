@@ -7,10 +7,24 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.google.firebase.firestore.FirebaseFirestore
 import com.streetfood.pos.data.models.UserRole
 import com.streetfood.pos.data.repository.UserSessionRepository
 import com.streetfood.pos.ui.screens.*
+import com.streetfood.pos.util.NetworkMonitor
 import com.streetfood.pos.viewmodel.*
 
 sealed class Screen(val route: String) {
@@ -24,6 +38,7 @@ sealed class Screen(val route: String) {
     object History        : Screen("history")
     object Reports        : Screen("reports")
     object Users          : Screen("users")
+    object ActivityLogs   : Screen("activity_logs")
 }
 
 @Composable
@@ -41,8 +56,35 @@ fun AppNavigation(
     val analyticsViewModel   : AnalyticsViewModel   = viewModel(factory = AnalyticsViewModelFactory(db))
     val reportViewModel      : ReportViewModel      = viewModel(factory = ReportViewModelFactory(db))
     val userMgmtViewModel    : UserManagementViewModel = viewModel(factory = UserManagementViewModelFactory(context, db))
+    val activityLogViewModel : ActivityLogViewModel = viewModel(factory = ActivityLogViewModelFactory(db))
 
-    NavHost(navController = navController, startDestination = Screen.Login.route) {
+    val isOffline by NetworkMonitor.isOffline.collectAsState()
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        if (isOffline) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color(0xFFD32F2F))
+                    .padding(vertical = 4.dp, horizontal = 16.dp)
+                    .windowInsetsPadding(WindowInsets.statusBars),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    "You are in offline mode. Changes will sync automatically.",
+                    color = Color.White,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
+
+        NavHost(
+            navController = navController, 
+            startDestination = Screen.Login.route,
+            modifier = Modifier.weight(1f)
+        ) {
 
         composable(Screen.Login.route) {
             LoginScreen(
@@ -61,6 +103,7 @@ fun AppNavigation(
             CashierDashboard(
                 transactionViewModel = transactionViewModel,
                 onNavigateToPOS = { navController.navigate(Screen.POS.route) },
+                onNavigateToProducts = { navController.navigate(Screen.Products.route) },
                 onLogout = {
                     authViewModel.logout()
                     navController.navigate(Screen.Login.route) { popUpTo(0) { inclusive = true } }
@@ -78,6 +121,7 @@ fun AppNavigation(
                 onNavigateToHistory   = { navController.navigate(Screen.History.route) },
                 onNavigateToReports   = { navController.navigate(Screen.Reports.route) },
                 onNavigateToUsers     = { navController.navigate(Screen.Users.route) },
+                onNavigateToActivityLogs = { navController.navigate(Screen.ActivityLogs.route) },
                 onLogout = {
                     authViewModel.logout()
                     navController.navigate(Screen.Login.route) { popUpTo(0) { inclusive = true } }
@@ -103,11 +147,7 @@ fun AppNavigation(
 
         // Admin-only screens with route guard
         composable(Screen.Products.route) {
-            if (UserSessionRepository.isAdmin) {
-                ProductManagementScreen(productViewModel = productViewModel, onBack = { navController.popBackStack() })
-            } else {
-                LaunchedEffect(Unit) { navController.popBackStack() }
-            }
+            ProductManagementScreen(productViewModel = productViewModel, onBack = { navController.popBackStack() })
         }
 
         composable(Screen.Analytics.route) {
@@ -140,6 +180,15 @@ fun AppNavigation(
             } else {
                 LaunchedEffect(Unit) { navController.popBackStack() }
             }
+        }
+
+        composable(Screen.ActivityLogs.route) {
+            if (UserSessionRepository.isAdmin) {
+                ActivityLogScreen(viewModel = activityLogViewModel, onBack = { navController.popBackStack() })
+            } else {
+                LaunchedEffect(Unit) { navController.popBackStack() }
+            }
+        }
         }
     }
 }

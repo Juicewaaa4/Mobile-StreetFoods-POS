@@ -6,13 +6,16 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.streetfood.pos.data.repository.ProductRepository
 import com.streetfood.pos.data.repository.TransactionRepository
 
+import com.streetfood.pos.data.repository.ActivityLogRepository
+
 class POSViewModelFactory(private val db: FirebaseFirestore) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         val productRepo = ProductRepository(db)
         val transactionRepo = TransactionRepository(db)
+        val logRepo = ActivityLogRepository(db)
         @Suppress("UNCHECKED_CAST")
         return when {
-            modelClass.isAssignableFrom(POSViewModel::class.java) -> POSViewModel(productRepo, transactionRepo) as T
+            modelClass.isAssignableFrom(POSViewModel::class.java) -> POSViewModel(productRepo, transactionRepo, logRepo) as T
             else -> throw IllegalArgumentException("Unknown ViewModel: ${modelClass.simpleName}")
         }
     }
@@ -21,9 +24,10 @@ class POSViewModelFactory(private val db: FirebaseFirestore) : ViewModelProvider
 class ProductViewModelFactory(private val db: FirebaseFirestore) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         val repo = ProductRepository(db)
+        val logRepo = ActivityLogRepository(db)
         @Suppress("UNCHECKED_CAST")
         return when {
-            modelClass.isAssignableFrom(ProductViewModel::class.java) -> ProductViewModel(repo) as T
+            modelClass.isAssignableFrom(ProductViewModel::class.java) -> ProductViewModel(repo, logRepo) as T
             else -> throw IllegalArgumentException("Unknown ViewModel: ${modelClass.simpleName}")
         }
     }

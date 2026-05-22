@@ -7,12 +7,15 @@ data class Transaction(
     val cashReceived: Double = 0.0,
     val change: Double = 0.0,
     val cashierName: String = "",
-    val items: List<TransactionItem> = emptyList()
+    val items: List<TransactionItem> = emptyList(),
+    val paymentMethod: String = "Cash",
+    val referenceNumber: String? = null
 )
 
 data class TransactionItem(
     val productName: String = "",
     val quantity: Int = 0,
     val unitPrice: Double = 0.0,
+    val unitCost: Double = 0.0,
     val totalPrice: Double = 0.0
 )

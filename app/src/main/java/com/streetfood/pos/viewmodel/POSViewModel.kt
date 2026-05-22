@@ -16,7 +16,8 @@ enum class ProductFilterMode { ALL, AVAILABLE, UNAVAILABLE }
 
 class POSViewModel(
     private val productRepo: ProductRepository,
-    private val transactionRepo: TransactionRepository
+    private val transactionRepo: TransactionRepository,
+    private val logRepo: com.streetfood.pos.data.repository.ActivityLogRepository
 ) : ViewModel() {
 
     private val _searchQuery = MutableStateFlow("")
@@ -123,9 +124,14 @@ class POSViewModel(
         val current = _cart.value.toMutableList()
         val idx = current.indexOfFirst { it.product.id == product.id }
         if (idx >= 0) {
-            current[idx] = current[idx].let { it.copy(quantity = it.quantity + 1) }
+            val existing = current[idx]
+            if (existing.quantity < product.stock) {
+                current[idx] = existing.copy(quantity = existing.quantity + 1)
+            } else {
+                return // Stock limit reached
+            }
         } else {
-            current.add(CartItem(product, 1))
+            if (product.stock > 0) current.add(CartItem(product, 1))
         }
         _cart.value = current
         recalcTotal()
@@ -145,9 +151,27 @@ class POSViewModel(
 
     fun updateQuantity(cartItem: CartItem, qty: Int) {
         if (qty <= 0) removeFromCart(cartItem) else {
-            _cart.value = _cart.value.map { if (it.product.id == cartItem.product.id) it.copy(quantity = qty) else it }
+            val validQty = qty.coerceAtMost(cartItem.product.stock)
+            _cart.value = _cart.value.map { if (it.product.id == cartItem.product.id) it.copy(quantity = validQty) else it }
             recalcTotal()
         }
+    }
+
+    fun setQuantity(product: Product, qty: Int) {
+        if (qty <= 0) {
+            _cart.value = _cart.value.filter { it.product.id != product.id }
+        } else {
+            val validQty = qty.coerceAtMost(product.stock)
+            val current = _cart.value.toMutableList()
+            val idx = current.indexOfFirst { it.product.id == product.id }
+            if (idx >= 0) {
+                current[idx] = current[idx].copy(quantity = validQty)
+            } else {
+                current.add(CartItem(product, validQty))
+            }
+            _cart.value = current
+        }
+        recalcTotal()
     }
 
     fun removeFromCart(cartItem: CartItem) {
@@ -164,10 +188,11 @@ class POSViewModel(
         _totalAmount.value = _cart.value.sumOf { it.totalPrice }
     }
 
-    fun processTransaction(cashInput: String): Boolean {
+    fun processTransaction(cashInput: String, paymentMethod: String = "Cash", referenceNumber: String? = null): Boolean {
         if (_isProcessingPayment.value) return false
         val cash = cashInput.toDoubleOrNull() ?: 0.0
         if (_cart.value.isEmpty() || cash < _totalAmount.value) return false
+        if (paymentMethod == "GCash" && referenceNumber.isNullOrBlank()) return false
 
         viewModelScope.launch {
             _isProcessingPayment.value = true
@@ -180,12 +205,23 @@ class POSViewModel(
                     change = cash - _totalAmount.value,
                     cashierName = cashierName,
                     items = _cart.value.map {
-                        TransactionItem(productName = it.product.name, quantity = it.quantity, unitPrice = it.product.price, totalPrice = it.totalPrice)
-                    }
+                        TransactionItem(productName = it.product.name, quantity = it.quantity, unitPrice = it.product.price, unitCost = it.product.cost, totalPrice = it.totalPrice)
+                    },
+                    paymentMethod = paymentMethod,
+                    referenceNumber = referenceNumber?.trim()
                 )
                 withTimeout(15_000) {
                     transactionRepo.insertTransaction(transaction)
+                    // Deduct stock for each purchased item
+                    _cart.value.forEach { item ->
+                        val product = item.product
+                        val newStock = (product.stock - item.quantity).coerceAtLeast(0)
+                        productRepo.updateProduct(product.copy(stock = newStock))
+                    }
                 }
+                val totalItems = _cart.value.sumOf { it.quantity }
+                val formattedTotal = "₱ %,.2f".format(_totalAmount.value)
+                logRepo.logAction("Sale", "Sold $totalItems item(s) for $formattedTotal via $paymentMethod")
                 clearCart()
                 _transactionSuccess.value = true
             } catch (e: Exception) {

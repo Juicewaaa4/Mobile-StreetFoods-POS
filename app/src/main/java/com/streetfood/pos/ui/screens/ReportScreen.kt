@@ -3,9 +3,7 @@ package com.streetfood.pos.ui.screens
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -18,17 +16,19 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
+
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -53,9 +53,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -70,19 +68,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-private val colProduct = 130.dp
-private val colSold = 72.dp
-private val colGross = 90.dp
-private val colCost = 90.dp
-private val colNet = 90.dp
-private val colPct = 76.dp
-private val colRemarks = 90.dp
-
 private val OrangeTotal = Color(0xFFE65100)
-private val HeaderBg = Color(0xFF1B5E20)
-private val HeaderText = Color.White
-private val AltRowBg = Color(0xFFF1F8E9)
-private val BorderColor = Color(0xFFBDBDBD)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -102,12 +88,27 @@ fun ReportScreen(
         if (uri == null) return@rememberLauncherForActivityResult
         runCatching {
             context.contentResolver.openOutputStream(uri)?.bufferedWriter()?.use { writer ->
-                writer.write(buildExcelHtml(state))
+                writer.write(buildExcelHtml(state.rows, state.totals, state.reportDate, false))
             }
         }.onSuccess {
             Toast.makeText(context, "Report downloaded.", Toast.LENGTH_SHORT).show()
         }.onFailure {
             Toast.makeText(context, "Unable to download report.", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    val exportGCashLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/vnd.ms-excel")
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        runCatching {
+            context.contentResolver.openOutputStream(uri)?.bufferedWriter()?.use { writer ->
+                writer.write(buildGCashExcelHtml(state.rawGCashTransactions, state.reportDate))
+            }
+        }.onSuccess {
+            Toast.makeText(context, "GCash Report downloaded.", Toast.LENGTH_SHORT).show()
+        }.onFailure {
+            Toast.makeText(context, "Unable to download GCash report.", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -128,12 +129,19 @@ fun ReportScreen(
             ReportActions(
                 selectedLabel = state.reportDate.ifBlank { filter.label },
                 hasRows = state.rows.isNotEmpty(),
+                gcashRowCount = state.gcashRows.size,
                 onPickDate = { showDatePicker = true },
                 onDownload = {
                     val stamp = state.reportDate.replace("/", "-").ifBlank {
                         SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
                     }
                     exportLauncher.launch("zoeys-sales-report-$stamp.xls")
+                },
+                onDownloadGCash = {
+                    val stamp = state.reportDate.replace("/", "-").ifBlank {
+                        SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+                    }
+                    exportGCashLauncher.launch("zoeys-gcash-report-$stamp.xls")
                 }
             )
 
@@ -159,7 +167,7 @@ fun ReportScreen(
                     "No Sales",
                     "No transactions found for ${state.reportDate.ifBlank { filter.label }}."
                 )
-                else -> ReportTable(
+                else -> ReportSummaryCard(
                     reportDate = state.reportDate,
                     rows = state.rows,
                     totals = state.totals
@@ -195,8 +203,10 @@ fun ReportScreen(
 private fun ReportActions(
     selectedLabel: String,
     hasRows: Boolean,
+    gcashRowCount: Int,
     onPickDate: () -> Unit,
-    onDownload: () -> Unit
+    onDownload: () -> Unit,
+    onDownloadGCash: () -> Unit
 ) {
     BoxWithConstraints(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp)
@@ -208,13 +218,23 @@ private fun ReportActions(
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                     OutlinedButton(onClick = onPickDate, modifier = Modifier.weight(1f)) {
                         Icon(Icons.Default.CalendarMonth, contentDescription = null)
-                        Spacer(Modifier.width(6.dp))
+                        Spacer(Modifier.width(4.dp))
                         Text("Date")
                     }
                     Button(onClick = onDownload, enabled = hasRows, modifier = Modifier.weight(1f)) {
                         Icon(Icons.Default.Download, contentDescription = null)
-                        Spacer(Modifier.width(6.dp))
-                        Text("Excel")
+                        Spacer(Modifier.width(4.dp))
+                        Text("All")
+                    }
+                    Button(
+                        onClick = onDownloadGCash,
+                        enabled = gcashRowCount > 0,
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF005CEE)) // GCash Blue
+                    ) {
+                        Icon(Icons.Default.Download, contentDescription = null)
+                        Spacer(Modifier.width(4.dp))
+                        Text(if (gcashRowCount > 0) "GCash ($gcashRowCount)" else "GCash")
                     }
                 }
             }
@@ -237,7 +257,16 @@ private fun ReportActions(
                 Button(onClick = onDownload, enabled = hasRows) {
                     Icon(Icons.Default.Download, contentDescription = null)
                     Spacer(Modifier.width(6.dp))
-                    Text("Download Excel")
+                    Text("All Excel")
+                }
+                Button(
+                    onClick = onDownloadGCash,
+                    enabled = gcashRowCount > 0,
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF005CEE)) // GCash Blue
+                ) {
+                    Icon(Icons.Default.Download, contentDescription = null)
+                    Spacer(Modifier.width(6.dp))
+                    Text(if (gcashRowCount > 0) "GCash ($gcashRowCount) Excel" else "GCash Excel")
                 }
             }
         }
@@ -245,184 +274,114 @@ private fun ReportActions(
 }
 
 @Composable
-private fun ReportTable(
+private fun ReportSummaryCard(
     reportDate: String,
     rows: List<ReportRow>,
     totals: ReportTotals
 ) {
-    val hScroll = rememberScrollState()
-
-    Column(modifier = Modifier.fillMaxSize()) {
-        Column(
-            modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(
-                "ZOEY'S STREET FOODS",
-                fontWeight = FontWeight.ExtraBold,
-                fontSize = 20.sp,
-                color = HeaderBg
-            )
-            Text(
-                "SALES REPORT",
-                fontWeight = FontWeight.Bold,
-                fontSize = 13.sp,
-                color = Color(0xFF388E3C)
-            )
-            Spacer(Modifier.height(4.dp))
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        // Summary totals cards
+        item {
             Text(
                 "Date: $reportDate",
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 12.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                fontWeight = FontWeight.Bold,
+                fontSize = 13.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 4.dp)
             )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                SummaryStatCard("Gross Sales", "₱ %,.2f".format(totals.totalGross), Color(0xFF1B5E20), Modifier.weight(1f))
+                SummaryStatCard("Net Amount", "₱ %,.2f".format(totals.totalNet), OrangeTotal, Modifier.weight(1f))
+                SummaryStatCard("Qty Sold", totals.totalQty.toString(), Color(0xFF1565C0), Modifier.weight(1f))
+            }
         }
 
-        Box(modifier = Modifier.fillMaxSize().horizontalScroll(hScroll)) {
-            Column {
-                TableHeaderRow()
-                LazyColumn(
-                    modifier = Modifier.widthIn(min = colProduct + colSold + colGross + colCost + colNet + colPct + colRemarks),
-                    contentPadding = PaddingValues(bottom = 24.dp)
+        // Per-product rows
+        items(rows) { row ->
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(10.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    items(rows.mapIndexed { i, r -> i to r }) { (idx, row) ->
-                        TableDataRow(row = row, isAlt = idx % 2 == 1)
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(row.productName, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text("${row.qtySold} pc(s) sold", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    item { TableTotalsRow(totals) }
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text("₱ %,.2f".format(row.grossSales), fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color(0xFF1B5E20))
+                        Text("Net: ₱ %,.2f".format(row.netAmount), fontSize = 11.sp, color = OrangeTotal)
+                    }
                 }
             }
         }
-    }
-}
 
-@Composable
-private fun TableHeaderRow() {
-    Row(modifier = Modifier.background(HeaderBg).border(1.dp, BorderColor)) {
-        HeaderCell("PRODUCT", colProduct, TextAlign.Left)
-        HeaderCell("SOLD\n(PC'S)", colSold, TextAlign.Center)
-        HeaderCell("GROSS\nSALES", colGross, TextAlign.Center)
-        HeaderCell("COST OF\nSALES", colCost, TextAlign.Center)
-        HeaderCell("NET\nAMOUNT", colNet, TextAlign.Center)
-        HeaderCell("PERCENT\nAGE", colPct, TextAlign.Center)
-        HeaderCell("REMARKS", colRemarks, TextAlign.Center)
-    }
-}
-
-@Composable
-private fun HeaderCell(text: String, width: Dp, align: TextAlign) {
-    Box(
-        modifier = Modifier.width(width).height(48.dp).border(0.5.dp, BorderColor.copy(alpha = 0.4f)),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = text,
-            color = HeaderText,
-            fontWeight = FontWeight.Bold,
-            fontSize = 11.sp,
-            textAlign = align,
-            lineHeight = 13.sp,
-            modifier = Modifier.padding(horizontal = 4.dp)
-        )
-    }
-}
-
-@Composable
-private fun TableDataRow(row: ReportRow, isAlt: Boolean) {
-    val bg = if (isAlt) AltRowBg else Color.White
-    Row(modifier = Modifier.background(bg).border(0.5.dp, BorderColor), verticalAlignment = Alignment.CenterVertically) {
-        DataCell(row.productName, colProduct, TextAlign.Left, isName = true)
-        DataCell(row.qtySold.toString(), colSold, TextAlign.Center)
-        DataCell("₱ %,.2f".format(row.grossSales), colGross, TextAlign.Right)
-        DataCell("₱ %,.2f".format(row.costOfSales), colCost, TextAlign.Right)
-        DataCell("₱ %,.2f".format(row.netAmount), colNet, TextAlign.Right)
-        DataCell("%.0f%%".format(row.percentage), colPct, TextAlign.Center)
-        DataCell("", colRemarks, TextAlign.Center)
-    }
-}
-
-@Composable
-private fun DataCell(
-    text: String,
-    width: Dp,
-    align: TextAlign,
-    isName: Boolean = false
-) {
-    Box(
-        modifier = Modifier.width(width).height(38.dp).border(0.3.dp, BorderColor.copy(alpha = 0.3f)),
-        contentAlignment = when (align) {
-            TextAlign.Right -> Alignment.CenterEnd
-            TextAlign.Center -> Alignment.Center
-            else -> Alignment.CenterStart
+        // Totals footer card
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(10.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF3E0)),
+                border = BorderStroke(1.5.dp, OrangeTotal)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(14.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("TOTAL", fontWeight = FontWeight.ExtraBold, fontSize = 14.sp, color = OrangeTotal)
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text("₱ %,.2f".format(totals.totalGross), fontWeight = FontWeight.ExtraBold, fontSize = 15.sp, color = OrangeTotal)
+                        Text("Net ₱ %,.2f  •  %.0f%%".format(totals.totalNet, totals.avgPercentage), fontSize = 11.sp, color = OrangeTotal)
+                    }
+                }
+            }
+            Spacer(Modifier.height(16.dp))
         }
+    }
+}
+
+@Composable
+private fun SummaryStatCard(label: String, value: String, color: Color, modifier: Modifier = Modifier) {
+    Card(
+        modifier = modifier,
+        shape = RoundedCornerShape(10.dp),
+        elevation = CardDefaults.cardElevation(2.dp)
     ) {
-        Text(
-            text = text,
-            fontSize = 12.sp,
-            fontWeight = if (isName) FontWeight.SemiBold else FontWeight.Normal,
-            textAlign = align,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(horizontal = 6.dp)
-        )
-    }
-}
-
-@Composable
-private fun TableTotalsRow(totals: ReportTotals) {
-    Row(modifier = Modifier.background(Color(0xFFFFF3E0)).border(1.dp, OrangeTotal), verticalAlignment = Alignment.CenterVertically) {
-        TotalCell("Total", colProduct, TextAlign.Left, bold = true, color = OrangeTotal)
-        TotalCell(totals.totalQty.toString(), colSold, TextAlign.Center, bold = true, color = OrangeTotal)
-        TotalCell("₱ %,.2f".format(totals.totalGross), colGross, TextAlign.Right, bold = true, color = OrangeTotal)
-        TotalCell("₱ %,.2f".format(totals.totalCost), colCost, TextAlign.Right, bold = true, color = OrangeTotal)
-        TotalCell("₱ %,.2f".format(totals.totalNet), colNet, TextAlign.Right, bold = true, color = OrangeTotal)
-        TotalCell("%.0f%%".format(totals.avgPercentage), colPct, TextAlign.Center, bold = true, color = OrangeTotal)
-        TotalCell("", colRemarks, TextAlign.Center, bold = false)
-    }
-}
-
-@Composable
-private fun TotalCell(
-    text: String,
-    width: Dp,
-    align: TextAlign,
-    bold: Boolean,
-    color: Color = OrangeTotal
-) {
-    Box(
-        modifier = Modifier.width(width).height(42.dp).border(0.3.dp, OrangeTotal.copy(alpha = 0.4f)),
-        contentAlignment = when (align) {
-            TextAlign.Right -> Alignment.CenterEnd
-            TextAlign.Center -> Alignment.Center
-            else -> Alignment.CenterStart
+        Column(modifier = Modifier.padding(10.dp)) {
+            Text(label, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(value, fontWeight = FontWeight.ExtraBold, fontSize = 13.sp, color = color, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-    ) {
-        Text(
-            text = text,
-            fontSize = 12.sp,
-            fontWeight = if (bold) FontWeight.ExtraBold else FontWeight.Normal,
-            color = color,
-            textAlign = align,
-            modifier = Modifier.padding(horizontal = 6.dp)
-        )
     }
 }
 
-private fun buildExcelHtml(state: ReportState): String {
+private fun buildExcelHtml(rows: List<ReportRow>, totals: ReportTotals, reportDate: String, isGCash: Boolean): String {
     fun esc(value: String): String = value
         .replace("&", "&amp;")
         .replace("<", "&lt;")
         .replace(">", "&gt;")
         .replace("\"", "&quot;")
 
-    val rows = state.rows.joinToString("") { row ->
+    val rowHtml = rows.joinToString("") { row ->
         """
         <tr>
           <td>${esc(row.productName)}</td>
-          <td class="center">${row.qtySold}</td>
-          <td class="money">${row.grossSales}</td>
-          <td class="money">${row.costOfSales}</td>
-          <td class="money">${row.netAmount}</td>
-          <td class="center">${"%.0f%%".format(row.percentage)}</td>
+          <td style="text-align:center;">${row.qtySold}</td>
+          <td style="text-align:right;">${"%,.2f".format(row.grossSales)}</td>
+          <td style="text-align:right;">&#8369; ${"%,.2f".format(row.costOfSales)}</td>
+          <td style="text-align:right;">&#8369; ${"%,.2f".format(row.netAmount)}</td>
+          <td style="text-align:center;">${"%.0f%%".format(row.percentage)}</td>
           <td></td>
         </tr>
         """.trimIndent()
@@ -433,37 +392,259 @@ private fun buildExcelHtml(state: ReportState): String {
         <head>
           <meta charset="utf-8" />
           <style>
-            table { border-collapse: collapse; font-family: Arial, sans-serif; }
-            th { background: #1B5E20; color: white; font-weight: bold; text-align: center; }
-            th, td { border: 1px solid #9E9E9E; padding: 6px 8px; }
-            .title { color: #1B5E20; font-size: 20px; font-weight: bold; text-align: center; }
-            .subtitle { color: #388E3C; font-weight: bold; text-align: center; }
-            .date { text-align: center; font-weight: bold; }
-            .money { mso-number-format:"₱ #,##0.00"; text-align: right; }
-            .center { text-align: center; }
-            .total td { background: #FFF3E0; color: #E65100; font-weight: bold; }
+            body { font-family: Calibri, Arial, sans-serif; margin: 0; }
+            table { border-collapse: collapse; width: 100%; }
+            td, th { border: 1px solid #555; padding: 5px 7px; font-size: 12px; }
+            .no-border { border: none !important; }
+            .logo-cell { border: none !important; text-align: center; padding-bottom: 4px; }
+            .brand-name {
+              font-size: 26px;
+              font-weight: 900;
+              color: #1B5E20;
+              font-family: 'Georgia', serif;
+              letter-spacing: 2px;
+            }
+            .brand-sub {
+              font-size: 11px;
+              color: #388E3C;
+              font-weight: bold;
+              letter-spacing: 4px;
+              text-transform: uppercase;
+            }
+            .date-cell { border: none !important; font-weight: bold; font-size: 13px; color: #000; }
+            th {
+              background-color: #fff;
+              font-weight: bold;
+              text-align: center;
+              font-size: 12px;
+              border: 1px solid #555;
+            }
+            .total-row td { color: #E65100; font-weight: bold; }
+            .signatory-label { border: none !important; text-align: left; font-size: 11px; }
+            .signatory-name { border: none !important; text-align: left; font-size: 11px; font-weight: bold; }
           </style>
         </head>
         <body>
           <table>
-            <tr><td class="title" colspan="7">ZOEY'S STREET FOODS</td></tr>
-            <tr><td class="subtitle" colspan="7">SALES REPORT</td></tr>
-            <tr><td class="date" colspan="7">Date: ${esc(state.reportDate)}</td></tr>
+            <!-- Logo / header rows -->
             <tr>
-              <th>PRODUCT</th><th>SOLD (PC'S)</th><th>GROSS SALES</th><th>COST OF SALES</th><th>NET AMOUNT</th><th>PERCENTAGE</th><th>REMARKS</th>
+              <td class="no-border" colspan="3"></td>
+              <td class="logo-cell" colspan="4">
+                <div class="brand-name">&#9836; ZOEY'S</div>
+                <div class="brand-name" style="font-size:32px; margin-top:-6px;">STREET FOODS</div>
+              </td>
             </tr>
-            $rows
-            <tr class="total">
+            <tr>
+              <td class="date-cell" colspan="2">Date:${esc(reportDate)}</td>
+              <td class="no-border" colspan="5"></td>
+            </tr>
+            <tr><td colspan="7" class="no-border" style="height:6px;"></td></tr>
+            <!-- Column headers -->
+            <tr>
+              <th>PRODUCT</th>
+              <th>SOLD(PC'S)</th>
+              <th>GROSS SALES</th>
+              <th>COST OF SALES</th>
+              <th>NET AMOUNT</th>
+              <th>PERCENTAGE</th>
+              <th>REMARKS</th>
+            </tr>
+            $rowHtml
+            <!-- Totals -->
+            <tr class="total-row">
               <td>Total</td>
-              <td class="center">${state.totals.totalQty}</td>
-              <td class="money">${state.totals.totalGross}</td>
-              <td class="money">${state.totals.totalCost}</td>
-              <td class="money">${state.totals.totalNet}</td>
-              <td class="center">${"%.0f%%".format(state.totals.avgPercentage)}</td>
+              <td style="text-align:center;">${totals.totalQty}</td>
+              <td style="text-align:right;">${"%,.2f".format(totals.totalGross)}</td>
+              <td style="text-align:right;">&#8369; ${"%,.2f".format(totals.totalCost)}</td>
+              <td style="text-align:right;">&#8369; ${"%,.2f".format(totals.totalNet)}</td>
+              <td style="text-align:center;">${"%.0f%%".format(totals.avgPercentage)}</td>
               <td></td>
+            </tr>
+            <!-- Spacer -->
+            <tr><td colspan="7" class="no-border" style="height:12px;"></td></tr>
+            <tr><td colspan="7" class="no-border" style="height:12px;"></td></tr>
+            <!-- Signatories -->
+            <tr>
+              <td class="no-border" colspan="4"></td>
+              <td class="signatory-label">Prepared By:</td>
+              <td class="signatory-name" colspan="2">Kenneth Francisco</td>
+            </tr>
+            <tr>
+              <td class="no-border" colspan="4"></td>
+              <td class="signatory-label">Reviewed By:</td>
+              <td class="signatory-name" colspan="2">Judy Peralta</td>
+            </tr>
+            <tr>
+              <td class="no-border" colspan="4"></td>
+              <td class="signatory-label">Checked By:</td>
+              <td class="signatory-name" colspan="2">Trecia E. De Jesus</td>
+            </tr>
+            <tr>
+              <td class="no-border" colspan="4"></td>
+              <td class="signatory-label">Noted By:</td>
+              <td class="signatory-name" colspan="2">Enrique DM Martinez</td>
             </tr>
           </table>
         </body>
         </html>
     """.trimIndent()
 }
+
+private fun buildGCashExcelHtml(
+    transactions: List<com.streetfood.pos.data.models.Transaction>,
+    reportDate: String
+): String {
+    fun esc(value: String): String = value
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace("\"", "&quot;")
+
+    // Build per-product aggregated rows (same as regular report) from GCash transactions only
+    val rows = transactions
+        .flatMap { it.items }
+        .groupBy { it.productName }
+        .map { (name, items) ->
+            val qty   = items.sumOf { it.quantity }
+            val gross = items.sumOf { it.totalPrice }
+            Triple(name, qty, gross)
+        }
+        .sortedBy { it.first }
+
+    val totalQty   = rows.sumOf { it.second }
+    val totalGross = rows.sumOf { it.third }
+
+    // Reference numbers – one per transaction, de-duplicated blanks
+    val refNumbers = transactions
+        .mapIndexed { i, tx ->
+            val ref = tx.referenceNumber?.trim()?.takeIf { it.isNotBlank() } ?: "—"
+            val time = java.text.SimpleDateFormat("hh:mm a", java.util.Locale.getDefault())
+                .format(java.util.Date(tx.timestamp))
+            val refStyle = if (ref != "—")
+                "background-color:#E3F2FD; color:#0D47A1; font-weight:bold; letter-spacing:1px;"
+            else
+                "color:#999; font-style:italic;"
+            Pair(time, Pair(ref, refStyle))
+        }
+
+    // Product rows HTML — reference numbers shown in last column
+    val rowHtml = rows.mapIndexed { idx, (name, qty, gross) ->
+        val refPair = refNumbers.getOrNull(idx)
+        val ref = refPair?.second?.first ?: ""
+        val refStyle = refPair?.second?.second ?: ""
+        """
+        <tr>
+          <td>${esc(name)}</td>
+          <td style="text-align:center;">$qty</td>
+          <td style="text-align:right;">${"%,.2f".format(gross)}</td>
+          <td style="$refStyle text-align:center; padding:5px 8px;">$ref</td>
+        </tr>
+        """.trimIndent()
+    }.joinToString("")
+
+    // Extra ref rows if more transactions than products
+    val extraRefRows = if (refNumbers.size > rows.size) {
+        refNumbers.drop(rows.size).joinToString("") { (time, refPair) ->
+            val (ref, refStyle) = refPair
+            """
+            <tr>
+              <td style="color:#aaa; font-style:italic;">$time</td>
+              <td style="text-align:center;">—</td>
+              <td style="text-align:right;">—</td>
+              <td style="$refStyle text-align:center; padding:5px 8px;">$ref</td>
+            </tr>
+            """.trimIndent()
+        }
+    } else ""
+
+    return """
+        <html>
+        <head>
+          <meta charset="utf-8" />
+          <style>
+            body { font-family: Calibri, Arial, sans-serif; margin: 0; }
+            table { border-collapse: collapse; width: 100%; }
+            td, th { border: 1px solid #555; padding: 5px 7px; font-size: 12px; }
+            .no-border { border: none !important; }
+            .logo-cell { border: none !important; text-align: center; padding-bottom: 4px; }
+            .brand-name {
+              font-size: 26px;
+              font-weight: 900;
+              color: #1B5E20;
+              font-family: 'Georgia', serif;
+              letter-spacing: 2px;
+            }
+            .date-cell { border: none !important; font-weight: bold; font-size: 13px; color: #000; }
+            th {
+              background-color: #fff;
+              font-weight: bold;
+              text-align: center;
+              font-size: 12px;
+              border: 1px solid #555;
+            }
+            .total-row td { color: #E65100; font-weight: bold; }
+            .signatory-label { border: none !important; text-align: left; font-size: 11px; }
+            .signatory-name  { border: none !important; text-align: left; font-size: 11px; font-weight: bold; }
+          </style>
+        </head>
+        <body>
+          <table>
+            <!-- Header: Zoey's branding (same as All report) -->
+            <tr>
+              <td class="no-border" colspan="2"></td>
+              <td class="logo-cell" colspan="2">
+                <div class="brand-name">&#9836; ZOEY'S</div>
+                <div class="brand-name" style="font-size:32px; margin-top:-6px;">STREET FOODS</div>
+                <div style="font-size:11px; color:#005CEE; font-weight:bold; letter-spacing:2px; margin-top:2px;">GCash Transactions</div>
+              </td>
+            </tr>
+            <tr>
+              <td class="date-cell" colspan="2">Date:${esc(reportDate)}</td>
+              <td class="no-border" colspan="2"></td>
+            </tr>
+            <tr><td colspan="4" class="no-border" style="height:6px;"></td></tr>
+            <!-- Column headers -->
+            <tr>
+              <th>PRODUCT</th>
+              <th>SOLD(PC'S)</th>
+              <th>GROSS SALES</th>
+              <th style="background-color:#E3F2FD; color:#0D47A1;">REFERENCE NO.</th>
+            </tr>
+            $rowHtml$extraRefRows
+            <!-- Totals -->
+            <tr class="total-row">
+              <td>Total</td>
+              <td style="text-align:center;">$totalQty</td>
+              <td style="text-align:right;">${"%,.2f".format(totalGross)}</td>
+              <td></td>
+            </tr>
+            <!-- Spacer -->
+            <tr><td colspan="4" class="no-border" style="height:12px;"></td></tr>
+            <tr><td colspan="4" class="no-border" style="height:12px;"></td></tr>
+            <!-- Signatories -->
+            <tr>
+              <td class="no-border" colspan="2"></td>
+              <td class="signatory-label">Prepared By:</td>
+              <td class="signatory-name">Kenneth Francisco</td>
+            </tr>
+            <tr>
+              <td class="no-border" colspan="2"></td>
+              <td class="signatory-label">Reviewed By:</td>
+              <td class="signatory-name">Judy Peralta</td>
+            </tr>
+            <tr>
+              <td class="no-border" colspan="2"></td>
+              <td class="signatory-label">Checked By:</td>
+              <td class="signatory-name">Trecia E. De Jesus</td>
+            </tr>
+            <tr>
+              <td class="no-border" colspan="2"></td>
+              <td class="signatory-label">Noted By:</td>
+              <td class="signatory-name">Enrique DM Martinez</td>
+            </tr>
+          </table>
+        </body>
+        </html>
+    """.trimIndent()
+}
+

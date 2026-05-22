@@ -75,6 +75,7 @@ fun AdminDashboard(
     onNavigateToHistory: () -> Unit,
     onNavigateToReports: () -> Unit,
     onNavigateToUsers: () -> Unit,
+    onNavigateToActivityLogs: () -> Unit,
     onLogout: () -> Unit
 ) {
     val adminName = UserSessionRepository.username
@@ -173,6 +174,7 @@ fun AdminDashboard(
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     AdminNavCard("POS - Start Selling", "Process orders and complete transactions", Icons.Default.ShoppingCart, onNavigateToPOS)
                     AdminNavCard("Product Management", "Add, edit, or toggle product availability", Icons.Default.Inventory, onNavigateToProducts)
+                    AdminNavCard("Activity Logs", "Track cashier restocks and sales", Icons.Default.History, onNavigateToActivityLogs)
                     AdminNavCard("Analytics", "View sales charts and trends", Icons.Default.BarChart, onNavigateToAnalytics)
                     AdminNavCard("Transaction History", "Browse all past transactions", Icons.Default.History, onNavigateToHistory)
                     AdminNavCard("Sales Report", "Generate and download date-based sales reports", Icons.Default.Assessment, onNavigateToReports)

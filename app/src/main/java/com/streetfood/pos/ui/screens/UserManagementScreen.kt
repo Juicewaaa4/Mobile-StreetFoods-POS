@@ -359,12 +359,20 @@ private fun EditUserDialog(
             Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 OutlinedTextField(
                     value         = username,
-                    onValueChange = { username = it },
+                    onValueChange = {}, // Read-only
                     label         = { Text("Username") },
                     leadingIcon   = { Icon(Icons.Default.Person, null) },
                     singleLine    = true,
                     shape         = RoundedCornerShape(12.dp),
-                    modifier      = Modifier.fillMaxWidth()
+                    modifier      = Modifier.fillMaxWidth(),
+                    enabled       = false // Disable editing username due to Firebase Auth restrictions
+                )
+
+                Text(
+                    text = "For security reasons, usernames and passwords cannot be changed. Delete and recreate the account if needed.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(horizontal = 4.dp)
                 )
 
                 Text("Role", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)

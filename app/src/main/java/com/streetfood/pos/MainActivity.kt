@@ -13,6 +13,7 @@ import androidx.navigation.compose.rememberNavController
 import com.google.firebase.firestore.FirebaseFirestore
 import com.streetfood.pos.navigation.AppNavigation
 import com.streetfood.pos.ui.theme.StreetFoodPOSTheme
+import com.streetfood.pos.util.NetworkMonitor
 import com.streetfood.pos.viewmodel.AuthViewModel
 
 class MainActivity : ComponentActivity() {
@@ -27,7 +28,14 @@ class MainActivity : ComponentActivity() {
         }
 
         enableEdgeToEdge()
-        val firestore = FirebaseFirestore.getInstance()
+        NetworkMonitor.initialize(this)
+        com.streetfood.pos.data.repository.UserSessionRepository.initialize(this)
+        val firestoreSettings = com.google.firebase.firestore.firestoreSettings {
+            isPersistenceEnabled = true
+        }
+        val firestore = FirebaseFirestore.getInstance().apply {
+            this.firestoreSettings = firestoreSettings
+        }
 
         setContent {
             StreetFoodPOSTheme {

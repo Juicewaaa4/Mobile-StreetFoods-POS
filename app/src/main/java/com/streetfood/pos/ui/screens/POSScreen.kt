@@ -18,6 +18,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.map
 import com.streetfood.pos.data.models.CartItem
@@ -46,14 +48,18 @@ fun POSScreen(
     var showExitConfirm by remember { mutableStateOf(false) }
     var showProceedConfirm by remember { mutableStateOf(false) }
     var pendingRemoveItem by remember { mutableStateOf<CartItem?>(null) }
+    var editingProductQty by remember { mutableStateOf<Product?>(null) }
+    var editingCartItemQty by remember { mutableStateOf<CartItem?>(null) }
     val cartSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     // Intercept system back button / swipe-back gesture
     BackHandler {
         if (showCartSheet) {
             showCartSheet = false
-        } else {
+        } else if (cart.isNotEmpty()) {
             showExitConfirm = true
+        } else {
+            onBack()
         }
     }
 
@@ -68,7 +74,9 @@ fun POSScreen(
             TopAppBar(
                 title = { Text("Point of Sale", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
-                    IconButton(onClick = { showExitConfirm = true }) {
+                    IconButton(onClick = { 
+                        if (cart.isNotEmpty()) showExitConfirm = true else onBack() 
+                    }) {
                         Icon(Icons.Default.ArrowBack, "Back")
                     }
                 },
@@ -202,7 +210,8 @@ fun POSScreen(
                             qty = qty,
                             onRowTapAdd = { posViewModel.addToCart(product) },
                             onIncrease = { posViewModel.addToCart(product) },
-                            onDecrease = { posViewModel.removeOneFromCart(product) }
+                            onDecrease = { posViewModel.removeOneFromCart(product) },
+                            onQtyClick = { editingProductQty = product }
                         )
                         Divider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant)
                     }
@@ -224,7 +233,8 @@ fun POSScreen(
                 onUpdateQty = { item, qty -> posViewModel.updateQuantity(item, qty) },
                 onRequestRemove = { pendingRemoveItem = it },
                 onClearCart = { posViewModel.clearCart(); showCartSheet = false },
-                onCheckout = { showProceedConfirm = true }
+                onCheckout = { showProceedConfirm = true },
+                onQtyClick = { editingCartItemQty = it }
             )
         }
     }
@@ -272,6 +282,33 @@ fun POSScreen(
             onDismiss = { pendingRemoveItem = null }
         )
     }
+
+    editingProductQty?.let { product ->
+        val currentQty = posViewModel.cartQtyFor(product.id)
+        EditQuantityDialog(
+            itemName = product.name,
+            currentQty = currentQty,
+            maxQty = product.stock,
+            onDismiss = { editingProductQty = null },
+            onConfirm = { newQty ->
+                posViewModel.setQuantity(product, newQty)
+                editingProductQty = null
+            }
+        )
+    }
+
+    editingCartItemQty?.let { item ->
+        EditQuantityDialog(
+            itemName = item.product.name,
+            currentQty = item.quantity,
+            maxQty = item.product.stock,
+            onDismiss = { editingCartItemQty = null },
+            onConfirm = { newQty ->
+                posViewModel.updateQuantity(item, newQty)
+                editingCartItemQty = null
+            }
+        )
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -281,7 +318,8 @@ private fun ProductListRow(
     qty: Int,
     onRowTapAdd: () -> Unit,
     onIncrease: () -> Unit,
-    onDecrease: () -> Unit
+    onDecrease: () -> Unit,
+    onQtyClick: () -> Unit
 ) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
@@ -309,6 +347,14 @@ private fun ProductListRow(
                 style = MaterialTheme.typography.bodyMedium,
                 color = if (product.isAvailable) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
             )
+            if (product.isAvailable) {
+                Text(
+                    text = "${product.stock} left in stock",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 2.dp)
+                )
+            }
         }
 
         if (!product.isAvailable) {
@@ -322,9 +368,11 @@ private fun ProductListRow(
             }
             Text(
                 qty.toString(),
-                modifier = Modifier.widthIn(min = 28.dp),
+                modifier = Modifier.widthIn(min = 28.dp).clickable { onQtyClick() },
                 textAlign = TextAlign.Center,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+                fontSize = 16.sp
             )
             IconButton(onClick = onIncrease, modifier = Modifier.size(40.dp)) {
                 Icon(Icons.Default.AddCircleOutline, contentDescription = "Add")
@@ -340,7 +388,8 @@ private fun CartSheetContent(
     onUpdateQty: (CartItem, Int) -> Unit,
     onRequestRemove: (CartItem) -> Unit,
     onClearCart: () -> Unit,
-    onCheckout: () -> Unit
+    onCheckout: () -> Unit,
+    onQtyClick: (CartItem) -> Unit
 ) {
     var showClearConfirm by remember { mutableStateOf(false) }
 
@@ -365,7 +414,8 @@ private fun CartSheetContent(
                     item = item,
                     onIncrease = { onUpdateQty(item, item.quantity + 1) },
                     onDecrease = { onUpdateQty(item, item.quantity - 1) },
-                    onRemove = { onRequestRemove(item) }
+                    onRemove = { onRequestRemove(item) },
+                    onQtyClick = { onQtyClick(item) }
                 )
                 Divider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant)
             }
@@ -420,7 +470,7 @@ private fun CartSheetContent(
 }
 
 @Composable
-private fun CartSheetItem(item: CartItem, onIncrease: () -> Unit, onDecrease: () -> Unit, onRemove: () -> Unit) {
+private fun CartSheetItem(item: CartItem, onIncrease: () -> Unit, onDecrease: () -> Unit, onRemove: () -> Unit, onQtyClick: () -> Unit) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -435,7 +485,14 @@ private fun CartSheetItem(item: CartItem, onIncrease: () -> Unit, onDecrease: ()
             IconButton(onClick = onDecrease, modifier = Modifier.size(40.dp)) {
                 Text("-", fontWeight = FontWeight.Bold, fontSize = 20.sp, color = MaterialTheme.colorScheme.primary)
             }
-            Text(item.quantity.toString(), modifier = Modifier.widthIn(min = 28.dp), textAlign = TextAlign.Center, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            Text(
+                item.quantity.toString(),
+                modifier = Modifier.widthIn(min = 28.dp).clickable { onQtyClick() },
+                textAlign = TextAlign.Center,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+                fontSize = 16.sp
+            )
             IconButton(onClick = onIncrease, modifier = Modifier.size(40.dp)) {
                 Text("+", fontWeight = FontWeight.Bold, fontSize = 20.sp, color = MaterialTheme.colorScheme.primary)
             }
@@ -445,4 +502,50 @@ private fun CartSheetItem(item: CartItem, onIncrease: () -> Unit, onDecrease: ()
             Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(20.dp))
         }
     }
+}
+
+@Composable
+private fun EditQuantityDialog(
+    itemName: String,
+    currentQty: Int,
+    maxQty: Int,
+    onDismiss: () -> Unit,
+    onConfirm: (Int) -> Unit
+) {
+    var textValue by remember { mutableStateOf(if (currentQty > 0) currentQty.toString() else "") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Set Quantity", fontWeight = FontWeight.Bold) },
+        text = {
+            Column {
+                Text(itemName, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(bottom = 12.dp))
+                OutlinedTextField(
+                    value = textValue,
+                    onValueChange = { newValue -> 
+                        if (newValue.isEmpty() || newValue.all { it.isDigit() }) {
+                            textValue = newValue
+                        }
+                    },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    singleLine = true,
+                    label = { Text("Quantity (Max: $maxQty)") },
+                    shape = RoundedCornerShape(10.dp)
+                )
+            }
+        },
+        confirmButton = {
+            Button(onClick = { 
+                val parsed = textValue.toIntOrNull() ?: 0
+                val validQty = parsed.coerceIn(0, maxQty)
+                onConfirm(validQty) 
+            }, shape = RoundedCornerShape(10.dp)) {
+                Text("Confirm", fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        },
+        shape = RoundedCornerShape(16.dp)
+    )
 }

@@ -9,7 +9,6 @@ import com.streetfood.pos.data.repository.UserSessionRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.tasks.await
 
 class AuthViewModel : ViewModel() {
 
@@ -34,8 +33,6 @@ class AuthViewModel : ViewModel() {
         // Check if user is already logged in
         val firebaseUser = auth.currentUser
         if (firebaseUser != null) {
-            // For simplicity, we define role by email domain or specific email.
-            // In a real app, this should come from Firestore.
             val role = if (firebaseUser.email?.contains("admin") == true) UserRole.ADMIN else UserRole.CASHIER
             val user = User(
                 id = firebaseUser.uid,
@@ -74,6 +71,7 @@ class AuthViewModel : ViewModel() {
                         role = role
                     )
                     UserSessionRepository.login(user)
+                    UserSessionRepository.saveOfflineCredentials(finalEmail, password, role.name, firebaseUser.uid)
                     _currentUser.value = user
                     _userRole.value = user.role.name
                     _isLoggedIn.value = true
@@ -82,13 +80,27 @@ class AuthViewModel : ViewModel() {
             }
             .addOnFailureListener { e ->
                 val msg = e.message ?: ""
+                val isNetworkError = "network" in msg.lowercase() || "timeout" in msg.lowercase() || com.streetfood.pos.util.NetworkMonitor.isOffline.value
+                
+                if (isNetworkError) {
+                    val offlineUser = UserSessionRepository.tryOfflineLogin(finalEmail, password)
+                    if (offlineUser != null) {
+                        UserSessionRepository.login(offlineUser)
+                        _currentUser.value = offlineUser
+                        _userRole.value = offlineUser.role.name
+                        _isLoggedIn.value = true
+                        _isLoading.value = false
+                        return@addOnFailureListener
+                    }
+                }
+
                 _loginError.value = when {
                     "INVALID_LOGIN_CREDENTIALS" in msg || "wrong-password" in msg || "invalid-credential" in msg ->
                         "Incorrect username or password. Please try again."
                     "user-not-found" in msg ->
                         "This account could not be found."
-                    "network" in msg.lowercase() || "timeout" in msg.lowercase() ->
-                        "No internet connection. Check your Wi-Fi or mobile data."
+                    isNetworkError ->
+                        "No internet connection and no offline account matches."
                     "too-many-requests" in msg ->
                         "Too many failed attempts. Please try again later."
                     "api_key" in msg.lowercase() || "blocked" in msg.lowercase() ->

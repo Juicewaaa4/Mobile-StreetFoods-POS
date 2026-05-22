@@ -47,7 +47,7 @@ class ProductRepository(private val db: FirebaseFirestore) {
                     "price"       to product.price,
                     "cost"        to product.cost,
                     "category"    to product.category,
-                    "isAvailable" to product.isAvailable
+                    "stock"       to product.stock
                 )
             )
             .addOnSuccessListener { cont.resume(Unit) }
@@ -63,7 +63,7 @@ class ProductRepository(private val db: FirebaseFirestore) {
                     "price"       to product.price,
                     "cost"        to product.cost,
                     "category"    to product.category,
-                    "isAvailable" to product.isAvailable
+                    "stock"       to product.stock
                 )
             )
             .addOnSuccessListener { cont.resume(Unit) }
