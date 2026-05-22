@@ -14,25 +14,33 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AdminPanelSettings
 import androidx.compose.material.icons.filled.Assessment
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Inventory
 import androidx.compose.material.icons.filled.Logout
 import androidx.compose.material.icons.filled.ManageAccounts
+import androidx.compose.material.icons.filled.NoteAdd
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -43,6 +51,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -50,14 +59,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.streetfood.pos.data.models.Product
+import com.streetfood.pos.data.models.TransactionItem
 import com.streetfood.pos.data.models.UiState
 import com.streetfood.pos.data.repository.UserSessionRepository
 import com.streetfood.pos.ui.components.ConfirmDialog
 import com.streetfood.pos.ui.components.StatCard
 import com.streetfood.pos.ui.components.formatPeso
 import com.streetfood.pos.viewmodel.AnalyticsViewModel
+import com.streetfood.pos.viewmodel.ProductViewModel
 import com.streetfood.pos.viewmodel.TransactionViewModel
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -75,6 +88,7 @@ fun AdminDashboard(
     transactionViewModel: TransactionViewModel,
     analyticsViewModel: AnalyticsViewModel,
     activityLogViewModel: ActivityLogViewModel,
+    productViewModel: ProductViewModel,
     onNavigateToPOS: () -> Unit,
     onNavigateToProducts: () -> Unit,
     onNavigateToAnalytics: () -> Unit,
@@ -96,6 +110,7 @@ fun AdminDashboard(
     val analyticsState by analyticsViewModel.analyticsData.collectAsStateWithLifecycle()
     var showLogoutConfirm by remember { mutableStateOf(false) }
     var showPurgeDialog by remember { mutableStateOf(false) }
+    var showAdjustmentDialog by remember { mutableStateOf(false) }
 
     val todayRevenue = (analyticsState as? UiState.Success)?.data?.totalRevenue ?: 0.0
     val todayCount = (analyticsState as? UiState.Success)?.data?.transactionCount ?: 0
@@ -186,6 +201,7 @@ fun AdminDashboard(
                     AdminNavCard("Transaction History", "Browse all past transactions", Icons.Default.History, onNavigateToHistory)
                     AdminNavCard("Sales Report", "Generate and download date-based sales reports", Icons.Default.Assessment, onNavigateToReports)
                     AdminNavCard("User Management", "Create, edit, and delete staff accounts", Icons.Default.ManageAccounts, onNavigateToUsers)
+                    AdminNavCard("Add Records", "Manually record missed sales for reports", Icons.Default.NoteAdd, onClick = { showAdjustmentDialog = true })
                     AdminNavCard("Purge Old Data", "Free up space by deleting old logs and transactions", Icons.Default.DeleteSweep, onClick = { showPurgeDialog = true })
                 }
             }
@@ -237,6 +253,27 @@ fun AdminDashboard(
                 }
             },
             onDismiss = { showPurgeConfirmDialog = null }
+        )
+    }
+
+    if (showAdjustmentDialog) {
+        AdjustmentRecordDialog(
+            productViewModel = productViewModel,
+            onDismiss = { showAdjustmentDialog = false },
+            onSubmit = { items, paymentMethod, refNo ->
+                transactionViewModel.insertAdjustment(items, paymentMethod, refNo) { success ->
+                    if (success) {
+                        val totalItems = items.sumOf { it.quantity }
+                        val totalAmount = items.sumOf { it.totalPrice }
+                        val formatted = "₱ %,.2f".format(totalAmount)
+                        activityLogViewModel.logAction("Adjustment", "Manual record: $totalItems item(s) for $formatted via $paymentMethod")
+                        Toast.makeText(context, "Adjustment recorded successfully!", Toast.LENGTH_SHORT).show()
+                    } else {
+                        Toast.makeText(context, "Failed to record adjustment.", Toast.LENGTH_SHORT).show()
+                    }
+                }
+                showAdjustmentDialog = false
+            }
         )
     }
 }
@@ -322,4 +359,165 @@ private fun AdminNavCard(
             Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun AdjustmentRecordDialog(
+    productViewModel: ProductViewModel,
+    onDismiss: () -> Unit,
+    onSubmit: (List<TransactionItem>, String, String?) -> Unit
+) {
+    val productsState by productViewModel.products.collectAsStateWithLifecycle()
+    val products = (productsState as? UiState.Success)?.data ?: emptyList()
+
+    val quantities = remember { mutableStateMapOf<String, Int>() }
+    var paymentMethod by remember { mutableStateOf("Cash") }
+    var referenceNumber by remember { mutableStateOf("") }
+
+    val selectedItems = products.filter { (quantities[it.id] ?: 0) > 0 }
+    val totalAmount = selectedItems.sumOf { it.price * (quantities[it.id] ?: 0) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Add Records", fontWeight = FontWeight.Bold)
+                IconButton(onClick = onDismiss) {
+                    Icon(Icons.Default.Close, "Close")
+                }
+            }
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    "Record missed sales that weren't entered in POS. These will appear in your reports.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                // Payment method chips
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf("Cash", "GCash").forEach { method ->
+                        FilterChip(
+                            selected = paymentMethod == method,
+                            onClick = { paymentMethod = method },
+                            label = { Text(method) },
+                            shape = RoundedCornerShape(50.dp)
+                        )
+                    }
+                }
+
+                if (paymentMethod == "GCash") {
+                    OutlinedTextField(
+                        value = referenceNumber,
+                        onValueChange = { referenceNumber = it },
+                        label = { Text("Reference Number") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                }
+
+                // Product list
+                Text("Select products & quantities:", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+
+                LazyColumn(
+                    modifier = Modifier.height(300.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    items(products, key = { it.id }) { product ->
+                        val qty = quantities[product.id] ?: 0
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(10.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = if (qty > 0) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
+                                else MaterialTheme.colorScheme.surfaceVariant
+                            )
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp).fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(product.name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                                    Text(formatPeso(product.price), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    IconButton(
+                                        onClick = { if (qty > 0) quantities[product.id] = qty - 1 },
+                                        modifier = Modifier.size(32.dp)
+                                    ) {
+                                        Icon(Icons.Default.Remove, "Decrease", modifier = Modifier.size(18.dp))
+                                    }
+
+                                    Text(
+                                        text = qty.toString(),
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.width(28.dp),
+                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                    )
+
+                                    IconButton(
+                                        onClick = { quantities[product.id] = qty + 1 },
+                                        modifier = Modifier.size(32.dp)
+                                    ) {
+                                        Icon(Icons.Default.Add, "Increase", modifier = Modifier.size(18.dp))
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Total
+                if (selectedItems.isNotEmpty()) {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp).fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("Total (${selectedItems.sumOf { quantities[it.id] ?: 0 }} items)", fontWeight = FontWeight.Bold)
+                            Text(formatPeso(totalAmount), fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.primary)
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    val items = selectedItems.map { product ->
+                        val qty = quantities[product.id] ?: 0
+                        TransactionItem(
+                            productName = product.name,
+                            quantity = qty,
+                            unitPrice = product.price,
+                            unitCost = product.cost,
+                            totalPrice = product.price * qty
+                        )
+                    }
+                    onSubmit(items, paymentMethod, if (paymentMethod == "GCash") referenceNumber else null)
+                },
+                enabled = selectedItems.isNotEmpty() && (paymentMethod != "GCash" || referenceNumber.isNotBlank())
+            ) {
+                Text("Submit Record", fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
 }

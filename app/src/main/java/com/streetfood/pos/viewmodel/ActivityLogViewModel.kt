@@ -65,6 +65,10 @@ class ActivityLogViewModel(private val repo: ActivityLogRepository) : ViewModel(
         _roleFilter.value = role
     }
 
+    fun logAction(actionType: String, details: String) {
+        repo.logAction(actionType, details)
+    }
+
     fun purgeOldData(timestamp: Long, onComplete: (Boolean) -> Unit) {
         repo.deleteOlderThan(timestamp, onComplete)
     }

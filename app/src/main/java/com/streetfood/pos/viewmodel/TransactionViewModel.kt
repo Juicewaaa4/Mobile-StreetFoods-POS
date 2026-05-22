@@ -12,6 +12,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -71,6 +72,32 @@ class TransactionViewModel(
 
     fun consumeCashierDashboardError() {
         _cashierDashboardError.value = null
+    }
+
+    fun insertAdjustment(
+        items: List<com.streetfood.pos.data.models.TransactionItem>,
+        paymentMethod: String,
+        referenceNumber: String?,
+        onResult: (Boolean) -> Unit
+    ) {
+        viewModelScope.launch {
+            try {
+                val total = items.sumOf { it.totalPrice }
+                val transaction = Transaction(
+                    totalAmount = total,
+                    cashReceived = total,
+                    change = 0.0,
+                    cashierName = com.streetfood.pos.data.repository.UserSessionRepository.username + " (Adjustment)",
+                    items = items,
+                    paymentMethod = paymentMethod,
+                    referenceNumber = referenceNumber?.trim()
+                )
+                repo.insertTransaction(transaction)
+                onResult(true)
+            } catch (e: Exception) {
+                onResult(false)
+            }
+        }
     }
 
     fun purgeOldData(timestamp: Long, onComplete: (Boolean) -> Unit) {
