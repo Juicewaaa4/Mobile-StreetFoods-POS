@@ -39,6 +39,9 @@ sealed class Screen(val route: String) {
     object Reports        : Screen("reports")
     object Users          : Screen("users")
     object ActivityLogs   : Screen("activity_logs")
+    object DailyBook      : Screen("daily_book")
+    object MonthlySummary : Screen("monthly_summary")
+    object Inventory      : Screen("inventory")
 }
 
 @Composable
@@ -57,6 +60,9 @@ fun AppNavigation(
     val reportViewModel      : ReportViewModel      = viewModel(factory = ReportViewModelFactory(db))
     val userMgmtViewModel    : UserManagementViewModel = viewModel(factory = UserManagementViewModelFactory(context, db))
     val activityLogViewModel : ActivityLogViewModel = viewModel(factory = ActivityLogViewModelFactory(db))
+    val dailyBookViewModel   : DailyBookViewModel   = viewModel(factory = DailyBookViewModelFactory(db))
+    val monthlySummaryViewModel : MonthlySummaryViewModel = viewModel(factory = MonthlySummaryViewModelFactory(db))
+    val inventoryViewModel   : InventoryViewModel   = viewModel(factory = InventoryViewModelFactory(db))
 
     val isOffline by NetworkMonitor.isOffline.collectAsState()
 
@@ -103,7 +109,7 @@ fun AppNavigation(
             CashierDashboard(
                 transactionViewModel = transactionViewModel,
                 onNavigateToPOS = { navController.navigate(Screen.POS.route) },
-                onNavigateToProducts = { navController.navigate(Screen.Products.route) },
+                onNavigateToInventory = { navController.navigate(Screen.Inventory.route) },
                 onLogout = {
                     authViewModel.logout()
                     navController.navigate(Screen.Login.route) { popUpTo(0) { inclusive = true } }
@@ -119,11 +125,14 @@ fun AppNavigation(
                 productViewModel      = productViewModel,
                 onNavigateToPOS       = { navController.navigate(Screen.POS.route) },
                 onNavigateToProducts  = { navController.navigate(Screen.Products.route) },
+                onNavigateToInventory = { navController.navigate(Screen.Inventory.route) },
                 onNavigateToAnalytics = { navController.navigate(Screen.Analytics.route) },
                 onNavigateToHistory   = { navController.navigate(Screen.History.route) },
                 onNavigateToReports   = { navController.navigate(Screen.Reports.route) },
                 onNavigateToUsers     = { navController.navigate(Screen.Users.route) },
                 onNavigateToActivityLogs = { navController.navigate(Screen.ActivityLogs.route) },
+                onNavigateToDailyBook = { navController.navigate(Screen.DailyBook.route) },
+                onNavigateToMonthlySummary = { navController.navigate(Screen.MonthlySummary.route) },
                 onLogout = {
                     authViewModel.logout()
                     navController.navigate(Screen.Login.route) { popUpTo(0) { inclusive = true } }
@@ -136,6 +145,15 @@ fun AppNavigation(
                 posViewModel       = posViewModel,
                 onBack             = { navController.popBackStack() },
                 onProceedToPayment = { navController.navigate(Screen.Payment.route) }
+            )
+        }
+
+        composable(Screen.Inventory.route) {
+            val isAdmin = UserSessionRepository.isAdmin
+            InventoryScreen(
+                viewModel = inventoryViewModel,
+                isAdmin = isAdmin,
+                onBack = { navController.popBackStack() }
             )
         }
 
@@ -187,6 +205,22 @@ fun AppNavigation(
         composable(Screen.ActivityLogs.route) {
             if (UserSessionRepository.isAdmin) {
                 ActivityLogScreen(viewModel = activityLogViewModel, onBack = { navController.popBackStack() })
+            } else {
+                LaunchedEffect(Unit) { navController.popBackStack() }
+            }
+        }
+
+        composable(Screen.DailyBook.route) {
+            if (UserSessionRepository.isAdmin) {
+                DailyBookScreen(viewModel = dailyBookViewModel, onBack = { navController.popBackStack() })
+            } else {
+                LaunchedEffect(Unit) { navController.popBackStack() }
+            }
+        }
+
+        composable(Screen.MonthlySummary.route) {
+            if (UserSessionRepository.isAdmin) {
+                MonthlySummaryScreen(viewModel = monthlySummaryViewModel, onBack = { navController.popBackStack() })
             } else {
                 LaunchedEffect(Unit) { navController.popBackStack() }
             }

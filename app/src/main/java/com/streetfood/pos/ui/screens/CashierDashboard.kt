@@ -29,7 +29,7 @@ import android.app.Activity
 fun CashierDashboard(
     transactionViewModel: TransactionViewModel,
     onNavigateToPOS: () -> Unit,
-    onNavigateToProducts: () -> Unit,
+    onNavigateToInventory: () -> Unit,
     onLogout: () -> Unit
 ) {
     val cashierName = UserSessionRepository.username
@@ -82,7 +82,7 @@ fun CashierDashboard(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
-                title = { Text("🍢 Zoey's Street Foods", fontWeight = FontWeight.Bold) },
+                title = { Text("🍲 Arceo's Lugaw House", fontWeight = FontWeight.Bold) },
                 actions = {
                     AssistChip(
                         onClick = {},
@@ -113,7 +113,7 @@ fun CashierDashboard(
                 )
                 NavigationBarItem(
                     selected = false,
-                    onClick = onNavigateToProducts,
+                    onClick = onNavigateToInventory,
                     icon = { Icon(Icons.Default.Inventory, contentDescription = "Inventory") },
                     label = { Text("Inventory") }
                 )
@@ -133,6 +133,7 @@ fun CashierDashboard(
                 todaySales = todaySales,
                 todayCount = todayCount,
                 onStartSelling = onNavigateToPOS,
+                onNavigateToInventory = onNavigateToInventory,
                 modifier = Modifier.padding(padding)
             )
             3 -> CashierMySalesTab(
@@ -165,6 +166,7 @@ private fun CashierHomeTab(
     todaySales: Double,
     todayCount: Int,
     onStartSelling: () -> Unit,
+    onNavigateToInventory: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     LazyColumn(
@@ -210,7 +212,6 @@ private fun CashierHomeTab(
         }
 
         item {
-            // Start selling button
             Button(
                 onClick = onStartSelling,
                 modifier = Modifier.fillMaxWidth().height(64.dp),
@@ -219,6 +220,17 @@ private fun CashierHomeTab(
                 Icon(Icons.Default.ShoppingCart, contentDescription = null, modifier = Modifier.size(28.dp))
                 Spacer(Modifier.width(12.dp))
                 Text("START SELLING", fontWeight = FontWeight.ExtraBold, fontSize = 18.sp)
+            }
+            Spacer(Modifier.height(8.dp))
+            Button(
+                onClick = onNavigateToInventory,
+                modifier = Modifier.fillMaxWidth().height(64.dp),
+                shape = RoundedCornerShape(16.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+            ) {
+                Icon(Icons.Default.Inventory, contentDescription = null, modifier = Modifier.size(28.dp))
+                Spacer(Modifier.width(12.dp))
+                Text("RAW INVENTORY", fontWeight = FontWeight.ExtraBold, fontSize = 18.sp)
             }
         }
     }

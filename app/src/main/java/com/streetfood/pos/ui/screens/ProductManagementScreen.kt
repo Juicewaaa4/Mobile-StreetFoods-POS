@@ -97,13 +97,6 @@ fun ProductManagementScreen(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.width(70.dp)
                             )
-                            Text(
-                                "Stock",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.width(50.dp),
-                                textAlign = TextAlign.Center
-                            )
                             Spacer(Modifier.width(80.dp)) // edit + delete
                         }
                         Divider()
@@ -114,10 +107,7 @@ fun ProductManagementScreen(
                             product = product,
                             isAdmin = com.streetfood.pos.data.repository.UserSessionRepository.isAdmin,
                             onEdit = { editProduct = product },
-                            onDelete = { deleteProduct = product },
-                            onStockUpdate = { newStock -> 
-                                productViewModel.updateProduct(product.copy(stock = newStock), notify = false, oldStock = product.stock)
-                            }
+                            onDelete = { deleteProduct = product }
                         )
                         Divider(
                             thickness = 0.5.dp,
@@ -153,26 +143,15 @@ fun ProductManagementScreen(
     }
 
     if (showAddDialog || editProduct != null) {
-        if (com.streetfood.pos.data.repository.UserSessionRepository.isAdmin || showAddDialog) {
-            ProductFormDialog(
-                existing = editProduct,
-                onDismiss = { showAddDialog = false; editProduct = null },
-                onSave = { product ->
-                    if (editProduct != null) productViewModel.updateProduct(product, oldStock = editProduct?.stock)
-                    else productViewModel.addProduct(product)
-                    showAddDialog = false; editProduct = null
-                }
-            )
-        } else {
-            StockUpdateDialog(
-                existing = editProduct!!,
-                onDismiss = { editProduct = null },
-                onSave = { newStock ->
-                    productViewModel.updateProduct(editProduct!!.copy(stock = newStock), oldStock = editProduct?.stock)
-                    editProduct = null
-                }
-            )
-        }
+        ProductFormDialog(
+            existing = editProduct,
+            onDismiss = { showAddDialog = false; editProduct = null },
+            onSave = { product ->
+                if (editProduct != null) productViewModel.updateProduct(product, oldStock = editProduct?.stock)
+                else productViewModel.addProduct(product)
+                showAddDialog = false; editProduct = null
+            }
+        )
     }
 }
 
@@ -183,8 +162,7 @@ private fun ProductRow(
     product: Product,
     isAdmin: Boolean,
     onEdit: () -> Unit,
-    onDelete: () -> Unit,
-    onStockUpdate: (Int) -> Unit
+    onDelete: () -> Unit
 ) {
     Row(
         modifier = Modifier
@@ -221,15 +199,7 @@ private fun ProductRow(
             modifier = Modifier.width(70.dp)
         )
 
-        // Stock
-        Text(
-            if (product.stock > 0) "${product.stock} pc" else "Out",
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.Bold,
-            color = if (product.stock > 0) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.error,
-            modifier = Modifier.width(50.dp),
-            textAlign = TextAlign.Center
-        )
+        // (Removed Stock column)
 
         if (isAdmin) {
             // Edit icon
@@ -253,61 +223,8 @@ private fun ProductRow(
                     modifier = Modifier.size(20.dp)
                 )
             }
-        } else {
-            // Cashier can only edit stock, so we just provide an "Update Stock" button
-            IconButton(
-                onClick = onEdit,
-                modifier = Modifier.size(40.dp)
-            ) {
-                Icon(
-                    Icons.Default.Inventory,
-                    contentDescription = "Update Stock",
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(20.dp)
-                )
-            }
-            Spacer(modifier = Modifier.width(40.dp)) // To keep alignment
         }
     }
-}
-
-@Composable
-private fun StockUpdateDialog(
-    existing: Product,
-    onDismiss: () -> Unit,
-    onSave: (Int) -> Unit
-) {
-    var stockText by remember { mutableStateOf(existing.stock.toString()) }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        shape = RoundedCornerShape(16.dp),
-        title = { Text("Update Stock: ${existing.name}", fontWeight = FontWeight.Bold) },
-        text = {
-            OutlinedTextField(
-                value = stockText,
-                onValueChange = { stockText = it },
-                label = { Text("Current Stock") },
-                modifier = Modifier.fillMaxWidth(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                shape = RoundedCornerShape(10.dp),
-                singleLine = true,
-                leadingIcon = { Icon(Icons.Default.Inventory, null) }
-            )
-        },
-        confirmButton = {
-            Button(
-                onClick = {
-                    val finalStock = (stockText.toIntOrNull() ?: 0).coerceAtLeast(0)
-                    onSave(finalStock)
-                },
-                shape = RoundedCornerShape(10.dp)
-            ) { Text("Save", fontWeight = FontWeight.Bold) }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
-        }
-    )
 }
 
 // ─── Add / Edit Dialog ───────────────────────────────────────────────────────
@@ -333,7 +250,6 @@ private fun ProductFormDialog(
             } ?: ""
         )
     }
-    var stockText by remember { mutableStateOf(existing?.stock?.toString() ?: "0") }
     var nameError by remember { mutableStateOf<String?>(null) }
     var priceError by remember { mutableStateOf<String?>(null) }
 
@@ -427,26 +343,13 @@ private fun ProductFormDialog(
                         }
                     }
                 }
-                // ─────────────────────────────────────────────────────────
-
-                // Stock Field
-                OutlinedTextField(
-                    value = stockText,
-                    onValueChange = { stockText = it },
-                    label = { Text("Initial / Current Stock") },
-                    modifier = Modifier.fillMaxWidth(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    shape = RoundedCornerShape(10.dp),
-                    singleLine = true,
-                    leadingIcon = { Icon(Icons.Default.Inventory, null, tint = MaterialTheme.colorScheme.onSurfaceVariant) }
-                )
+                // (Removed Stock Field)
             }
         },
         confirmButton = {
             Button(
                 onClick = {
                     val finalPrice = priceText.toDoubleOrNull()
-                    val finalStock = (stockText.toIntOrNull() ?: 0).coerceAtLeast(0)
                     when {
                         name.isBlank()                     -> nameError = "Product name is required"
                         finalPrice == null || finalPrice <= 0 -> priceError = "Enter a valid price"
@@ -456,7 +359,7 @@ private fun ProductFormDialog(
                                 name = name.trim(),
                                 price = finalPrice,
                                 cost = costText.toDoubleOrNull() ?: 0.0,
-                                stock = finalStock
+                                stock = existing?.stock ?: 0
                             )
                         )
                     }

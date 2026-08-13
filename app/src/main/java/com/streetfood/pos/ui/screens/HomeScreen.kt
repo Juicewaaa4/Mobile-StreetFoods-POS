@@ -57,7 +57,7 @@ fun HomeScreen(
                 Icon(
                     Icons.Default.ExitToApp,
                     contentDescription = "Logout",
-                    tint = PrimaryGreen,
+                    tint = PrimaryOrange,
                     modifier = Modifier.size(24.dp)
                 )
             }
@@ -90,7 +90,7 @@ fun HomeScreen(
                             Icon(
                                 Icons.Default.ShoppingCart,
                                 contentDescription = "POS",
-                                tint = PrimaryGreen,
+                                tint = PrimaryOrange,
                                 modifier = Modifier.size(40.dp)
                             )
                             Column {
@@ -131,7 +131,7 @@ fun HomeScreen(
                             Icon(
                                 Icons.Default.Star,
                                 contentDescription = "Products",
-                                tint = PrimaryGreen,
+                                tint = PrimaryOrange,
                                 modifier = Modifier.size(40.dp)
                             )
                             Column {
@@ -169,7 +169,7 @@ fun HomeScreen(
                             Icon(
                                 Icons.Default.List,
                                 contentDescription = "Transactions",
-                                tint = PrimaryGreen,
+                                tint = PrimaryOrange,
                                 modifier = Modifier.size(40.dp)
                             )
                             Column {
@@ -207,7 +207,7 @@ fun HomeScreen(
                             Icon(
                                 Icons.Default.ShoppingCart,
                                 contentDescription = "POS",
-                                tint = PrimaryGreen,
+                                tint = PrimaryOrange,
                                 modifier = Modifier.size(40.dp)
                             )
                             Column {
@@ -264,7 +264,7 @@ fun HomeScreen(
                                 text = "₱0.00",
                                 fontSize = 20.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = PrimaryGreen
+                                color = PrimaryOrange
                             )
                         }
                         
@@ -280,7 +280,7 @@ fun HomeScreen(
                                 text = "0",
                                 fontSize = 20.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = PrimaryGreen
+                                color = PrimaryOrange
                             )
                         }
                     }

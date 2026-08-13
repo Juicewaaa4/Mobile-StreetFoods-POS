@@ -85,7 +85,9 @@ class AuthViewModel : ViewModel() {
         _loginError.value = null
 
         val cleanEmail = email.trim().lowercase()
-        val finalEmail = if (!cleanEmail.contains("@")) "$cleanEmail@test.com" else cleanEmail
+        // Auto-correct common typos
+        val correctedEmail = cleanEmail.replace("@gmal.com", "@gmail.com")
+        val finalEmail = if (!correctedEmail.contains("@")) "$correctedEmail@test.com" else correctedEmail
 
         auth.signInWithEmailAndPassword(finalEmail, password)
             .addOnSuccessListener { result ->
@@ -104,8 +106,16 @@ class AuthViewModel : ViewModel() {
                                     _isLoggedIn.value = true
                                 }
                             } else {
-                                fallbackLogin(firebaseUser)
-                                UserSessionRepository.saveOfflineCredentials(finalEmail, password, _userRole.value ?: "CASHIER", firebaseUser.uid)
+                                // Account exists in Auth but not in Firestore - create it now!
+                                val role = if (finalEmail == "arceo@gmail.com") UserRole.ADMIN else UserRole.CASHIER
+                                val newUser = User(id = firebaseUser.uid, username = finalEmail.substringBefore("@"), email = finalEmail, role = role)
+                                db.collection("users").document(firebaseUser.uid).set(newUser)
+                                
+                                UserSessionRepository.login(newUser)
+                                UserSessionRepository.saveOfflineCredentials(finalEmail, password, role.name, firebaseUser.uid)
+                                _currentUser.value = newUser
+                                _userRole.value = role.name
+                                _isLoggedIn.value = true
                             }
                             _isLoading.value = false
                         }
@@ -120,6 +130,31 @@ class AuthViewModel : ViewModel() {
             }
             .addOnFailureListener { e ->
                 val msg = e.message ?: ""
+                
+                // AUTO-REGISTER ADMIN ACCOUNT IF IT DOES NOT EXIST YET
+                if (finalEmail == "arceo@gmail.com" && ("INVALID_LOGIN_CREDENTIALS" in msg || "user-not-found" in msg || "invalid-credential" in msg)) {
+                    auth.createUserWithEmailAndPassword(finalEmail, password)
+                        .addOnSuccessListener { regResult ->
+                            val newUserAuth = regResult.user
+                            if (newUserAuth != null) {
+                                val dbUser = User(id = newUserAuth.uid, email = finalEmail, username = "Admin", role = UserRole.ADMIN)
+                                com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("users").document(newUserAuth.uid).set(dbUser)
+                                
+                                UserSessionRepository.login(dbUser)
+                                UserSessionRepository.saveOfflineCredentials(finalEmail, password, dbUser.role.name, newUserAuth.uid)
+                                _currentUser.value = dbUser
+                                _userRole.value = dbUser.role.name
+                                _isLoggedIn.value = true
+                                _isLoading.value = false
+                            }
+                        }
+                        .addOnFailureListener { regError ->
+                            _loginError.value = "Failed to auto-create Admin: ${regError.message}"
+                            _isLoading.value = false
+                        }
+                    return@addOnFailureListener
+                }
+
                 val isNetworkError = "network" in msg.lowercase() || "timeout" in msg.lowercase() || com.streetfood.pos.util.NetworkMonitor.isOffline.value
                 
                 if (isNetworkError) {

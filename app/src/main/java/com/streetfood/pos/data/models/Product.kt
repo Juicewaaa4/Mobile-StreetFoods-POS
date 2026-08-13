@@ -9,7 +9,7 @@ data class Product(
     val name: String = "",
     val price: Double = 0.0,       // selling price
     val cost: Double = 0.0,        // capital cost
-    val category: String = "Street Food",
+    val category: String = "Lugaw",
     val stock: Int = 0             // inventory stock
 ) {
     /** Profit per item = selling price - cost */

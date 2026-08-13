@@ -13,9 +13,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 private val LightColorScheme = lightColorScheme(
-    primary = PrimaryGreen,
-    secondary = SecondaryGreen,
-    tertiary = SecondaryGreen,
+    primary = PrimaryOrange,
+    secondary = SecondaryOrange,
+    tertiary = AccentGreen,
     background = Background,
     surface = Surface,
     onPrimary = Surface,

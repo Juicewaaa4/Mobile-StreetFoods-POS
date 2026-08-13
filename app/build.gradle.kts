@@ -10,7 +10,7 @@ android {
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.streetfoods.pos"
+        applicationId = "com.streetfood.pos"
         minSdk = 24
         targetSdk = 34
         versionCode = 1

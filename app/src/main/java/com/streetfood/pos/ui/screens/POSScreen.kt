@@ -288,7 +288,7 @@ fun POSScreen(
         EditQuantityDialog(
             itemName = product.name,
             currentQty = currentQty,
-            maxQty = product.stock,
+            maxQty = Int.MAX_VALUE,
             onDismiss = { editingProductQty = null },
             onConfirm = { newQty ->
                 posViewModel.setQuantity(product, newQty)
@@ -301,7 +301,7 @@ fun POSScreen(
         EditQuantityDialog(
             itemName = item.product.name,
             currentQty = item.quantity,
-            maxQty = item.product.stock,
+            maxQty = Int.MAX_VALUE,
             onDismiss = { editingCartItemQty = null },
             onConfirm = { newQty ->
                 posViewModel.updateQuantity(item, newQty)
@@ -347,14 +347,6 @@ private fun ProductListRow(
                 style = MaterialTheme.typography.bodyMedium,
                 color = if (product.isAvailable) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
             )
-            if (product.isAvailable) {
-                Text(
-                    text = "${product.stock} left in stock",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 2.dp)
-                )
-            }
         }
 
         if (!product.isAvailable) {
@@ -529,7 +521,7 @@ private fun EditQuantityDialog(
                     },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     singleLine = true,
-                    label = { Text("Quantity (Max: $maxQty)") },
+                    label = { if (maxQty != Int.MAX_VALUE) Text("Quantity (Max: $maxQty)") else Text("Quantity") },
                     shape = RoundedCornerShape(10.dp)
                 )
             }

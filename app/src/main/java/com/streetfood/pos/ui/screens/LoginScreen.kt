@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -18,6 +19,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
@@ -28,11 +30,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.streetfood.pos.R
 import com.streetfood.pos.viewmodel.AuthViewModel
 import androidx.compose.foundation.layout.imePadding
 
 @OptIn(ExperimentalMaterial3Api::class)
-@Composable
+@Composable  
 fun LoginScreen(
     authViewModel: AuthViewModel = viewModel(),
     onLoginSuccess: (role: String) -> Unit
@@ -78,15 +81,17 @@ fun LoginScreen(
     ) {
             // Logo section
             Image(
-                painter = painterResource(id = com.streetfood.pos.R.drawable.app_logo),
+                painter = painterResource(id = R.drawable.app_logo),
                 contentDescription = "App Logo",
-                modifier = Modifier.size(120.dp)
+                modifier = Modifier
+                    .size(120.dp)
+                    .clip(CircleShape)
             )
 
             Spacer(Modifier.height(20.dp))
 
             Text(
-                text = "Zoey's Street Foods",
+                text = "Arceo's Sarap Lugaw House",
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.ExtraBold,
                 color = MaterialTheme.colorScheme.primary,

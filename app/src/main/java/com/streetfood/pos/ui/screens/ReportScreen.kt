@@ -135,13 +135,13 @@ fun ReportScreen(
                     val stamp = state.reportDate.replace("/", "-").ifBlank {
                         SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
                     }
-                    exportLauncher.launch("zoeys-sales-report-$stamp.xls")
+                    exportLauncher.launch("arceo-sales-report-$stamp.xls")
                 },
                 onDownloadGCash = {
                     val stamp = state.reportDate.replace("/", "-").ifBlank {
                         SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
                     }
-                    exportGCashLauncher.launch("zoeys-gcash-report-$stamp.xls")
+                    exportGCashLauncher.launch("arceo-gcash-report-$stamp.xls")
                 }
             )
 
@@ -400,13 +400,13 @@ private fun buildExcelHtml(rows: List<ReportRow>, totals: ReportTotals, reportDa
             .brand-name {
               font-size: 26px;
               font-weight: bold;
-              color: #1B5E20;
+              color: #E65100;
               font-family: 'Georgia', serif;
             }
             .brand-name-large {
               font-size: 32px;
               font-weight: bold;
-              color: #1B5E20;
+              color: #E65100;
               font-family: 'Georgia', serif;
             }
             .date-cell { border: none !important; font-weight: bold; font-size: 13px; color: #000; }
@@ -427,8 +427,8 @@ private fun buildExcelHtml(rows: List<ReportRow>, totals: ReportTotals, reportDa
             <tr>
               <td class="no-border" colspan="3"></td>
               <td class="logo-cell" colspan="4">
-                <div class="brand-name">ZOEY'S</div>
-                <div class="brand-name-large">STREET FOODS</div>
+                <div class="brand-name">ARCEO'S</div>
+                <div class="brand-name-large">LUGAW HOUSE</div>
               </td>
             </tr>
             <tr>
@@ -552,13 +552,13 @@ private fun buildGCashExcelHtml(
             .brand-name {
               font-size: 26px;
               font-weight: bold;
-              color: #1B5E20;
+              color: #E65100;
               font-family: 'Georgia', serif;
             }
             .brand-name-large {
               font-size: 32px;
               font-weight: bold;
-              color: #1B5E20;
+              color: #E65100;
               font-family: 'Georgia', serif;
             }
             .gcash-title {
@@ -586,8 +586,8 @@ private fun buildGCashExcelHtml(
             <tr>
               <td class="no-border" colspan="3"></td>
               <td class="logo-cell" colspan="5">
-                <div class="brand-name">ZOEY'S</div>
-                <div class="brand-name-large">STREET FOODS</div>
+                <div class="brand-name">ARCEO'S</div>
+                <div class="brand-name-large">LUGAW HOUSE</div>
                 <div class="gcash-title">GCash Transactions</div>
               </td>
             </tr>

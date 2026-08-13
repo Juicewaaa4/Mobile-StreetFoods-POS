@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.Assessment
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Fastfood
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Inventory
 import androidx.compose.material.icons.filled.Logout
@@ -79,6 +80,8 @@ import java.util.Locale
 
 import android.widget.Toast
 import com.streetfood.pos.viewmodel.ActivityLogViewModel
+import androidx.compose.material.icons.filled.Book
+import androidx.compose.material.icons.filled.MonetizationOn
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material3.RadioButton
 
@@ -91,11 +94,14 @@ fun AdminDashboard(
     productViewModel: ProductViewModel,
     onNavigateToPOS: () -> Unit,
     onNavigateToProducts: () -> Unit,
+    onNavigateToInventory: () -> Unit,
     onNavigateToAnalytics: () -> Unit,
     onNavigateToHistory: () -> Unit,
     onNavigateToReports: () -> Unit,
     onNavigateToUsers: () -> Unit,
     onNavigateToActivityLogs: () -> Unit,
+    onNavigateToDailyBook: () -> Unit,
+    onNavigateToMonthlySummary: () -> Unit,
     onLogout: () -> Unit
 ) {
     val adminName = UserSessionRepository.username
@@ -139,7 +145,7 @@ fun AdminDashboard(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Zoey's Street Foods", fontWeight = FontWeight.Bold) },
+                title = { Text("Arceo's Lugaw House", fontWeight = FontWeight.Bold) },
                 actions = {
                     AssistChip(
                         onClick = {},
@@ -195,11 +201,14 @@ fun AdminDashboard(
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     AdminNavCard("POS - Start Selling", "Process orders and complete transactions", Icons.Default.ShoppingCart, onNavigateToPOS)
-                    AdminNavCard("Product Management", "Add, edit, or toggle product availability", Icons.Default.Inventory, onNavigateToProducts)
-                    AdminNavCard("Activity Logs", "Track cashier restocks and sales", Icons.Default.History, onNavigateToActivityLogs)
+                    AdminNavCard("Product Management", "Add, edit, or toggle product availability", Icons.Default.Fastfood, onNavigateToProducts)
+                    AdminNavCard("Raw Inventory", "Manage raw ingredients and track stock levels", Icons.Default.Inventory, onNavigateToInventory)
+                    AdminNavCard("Activity Logs", "Track admin and cashier actions", Icons.Default.History, onNavigateToActivityLogs)
                     AdminNavCard("Analytics", "View sales charts and trends", Icons.Default.BarChart, onNavigateToAnalytics)
                     AdminNavCard("Transaction History", "Browse all past transactions", Icons.Default.History, onNavigateToHistory)
                     AdminNavCard("Sales Report", "Generate and download date-based sales reports", Icons.Default.Assessment, onNavigateToReports)
+                    AdminNavCard("Daily Book", "Record daily expenses and track sales", Icons.Default.Book, onNavigateToDailyBook)
+                    AdminNavCard("Monthly Summary", "View monthly profit and fixed expenses", Icons.Default.MonetizationOn, onNavigateToMonthlySummary)
                     AdminNavCard("User Management", "Create, edit, and delete staff accounts", Icons.Default.ManageAccounts, onNavigateToUsers)
                     AdminNavCard("Add Records", "Manually record missed sales for reports", Icons.Default.NoteAdd, onClick = { showAdjustmentDialog = true })
                     AdminNavCard("Purge Old Data", "Free up space by deleting old logs and transactions", Icons.Default.DeleteSweep, onClick = { showPurgeDialog = true })
